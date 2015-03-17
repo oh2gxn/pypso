@@ -26,6 +26,36 @@ semi-automatic antenna design. The idea is following:
 
 Author: Janne Toivola, OH2GXN
 
+
+* Sources of information
+
+From: http://273k.net/gsm/designing-and-building-a-gsm-antenna/yagi/
+----
+The Driven Element is a dipole which consists of two 1/4 wavelength
+elements. The Reflector is slightly bigger then the driven element and
+reflects the signal back towards the driven element. The Directors are
+slightly smaller then the driven element with each one being slightly smaller
+again as they move away from the driven element, the directors help to focus
+the signal giving it a higher gain. The main gain is directed in the same
+direction as the arrow.
+
+The design of a yagi antenna is much more complex and requires a lot more
+experimentation then a monopole antenna. I don't believe there is any known
+simple mathematical formula that can be used to design a yagi antenna. Am I
+correct?
+
+What we do have is a rule of thumb which gives a start pointing when
+designing a yagi antenna. The idea is to scale up the reflector element by
+about 5% over the driven element, and to scale down the first director
+elements by about 5%, and to scale down again by about 5% for each extra
+director. The spacing between each of the elements would be about 20% of a
+wavelength, these can also be scaled down for each director.
+
+Using this starting point you can adjusted each of the elements lengths and
+there offsets until you find the best preforming design. These adjustments
+can be easily and quickly made using antenna design software.
+----
+
 * Progress
 ** TODO NEC file generator
 - learn how to write a yagi description, given element dimensions
