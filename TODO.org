@@ -1,37 +1,40 @@
 * Introduction to PyPSO
+
 The name refers to:
 - Python, the programming language
 - Particle Swarm Optimization (PSO), a search heuristic
 
 The two above are combined with NEC2, antenna modelling software, to perform
 semi-automatic antenna design. The idea is following:
-- 1 ::take an initial guess for a yagi antenna, which has 
+- 1 :: take an initial guess for a yagi antenna, which has: 
   - a given number of elements, approximately good lengths and positions
   - long enough boom
-- 2 :: define which parameters to optimize (elem. lengths and positions)
+- 2 :: define which P parameters to optimize (elem. lengths and positions)
 - 3 :: define a univariate evaluation criterion (say, an equation based on
        SWR & F/B ratio at given frequency band)
-- 4 :: generate a "cloud" of proposed antenna designs by randomly varying the
-       free parameters (2)
+- 4 :: generate a "cloud" of N proposed antenna designs by randomly varying
+       the free parameters (2)
 - 5 :: evaluate each of the proposed antennas
   - run NEC2
   - calculate the evaluation function (3)
 - 6 :: modify each of the designs in terms of PSO
-  - the parameter vector is a point in N-dimensional space
+  - the parameter vector is a point in P-dimensional space
   - each antenna design (particle) has inertia,
-  - but also attracted towards the best design
+  - but also attracted towards the best of the current N designs 
+    (or the best neighbor to give SOM-like behavior / locality?)
 - 7 :: if all the variants seem converged to a single design, quit
   - else, move to (5) for next iteration
-- 8 :: if the end result looks shit, jump to (1)
+- 8 :: if the end result looks like crap, jump to (1)
 
 Author: Janne Toivola, OH2GXN
 
 
 * Sources of information
 
+** Sane initial guess
 From: http://273k.net/gsm/designing-and-building-a-gsm-antenna/yagi/
 ----
-The Driven Element is a dipole which consists of two 1/4 wavelength
+"The Driven Element is a dipole which consists of two 1/4 wavelength
 elements. The Reflector is slightly bigger then the driven element and
 reflects the signal back towards the driven element. The Directors are
 slightly smaller then the driven element with each one being slightly smaller
@@ -53,7 +56,7 @@ wavelength, these can also be scaled down for each director.
 
 Using this starting point you can adjusted each of the elements lengths and
 there offsets until you find the best preforming design. These adjustments
-can be easily and quickly made using antenna design software.
+can be easily and quickly made using antenna design software."
 ----
 
 * Progress
