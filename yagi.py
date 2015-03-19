@@ -41,9 +41,18 @@ class Yagi:
 
 def addParameters(parser):
     '''Command line parameters for stand-alone NEC runs.'''
-    
+    parser.add_argument('positions', metavar='pos0,pos1,...',
+                        help='element positions')
+    parser.add_argument('lengths', metavar='len0,len1,...',
+                        help='element lengths')
+    parser.add_argument('diameters', metavar='diam0,diam1,...',
+                        help='element diameters')
+    # TODO: others
+
 
 if __name__ == '__main__':
     sys.stderr.write('NOTE: This code was not meant to be run stand-alone.\n')
     parser = argparse.ArgumentParser(description='Run NEC2 for a given Yagi antenna.')
-    
+    addParameters(parser)
+    args = parser.parse_args()
+    # TODO: ant = Yagi(args)
