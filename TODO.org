@@ -31,6 +31,10 @@ Author: Janne Toivola, OH2GXN
 
 * Sources of information
 
+** NEC file format
+http://www.qsl.net/m5aiq/nec-tutorial-a.html
+http://www.antennex.com/w4rnl/col0102/amod47.html
+
 ** Sane initial guess
 From: http://273k.net/gsm/designing-and-building-a-gsm-antenna/yagi/
 ----
@@ -58,6 +62,7 @@ Using this starting point you can adjusted each of the elements lengths and
 there offsets until you find the best preforming design. These adjustments
 can be easily and quickly made using antenna design software."
 ----
+
 
 * Progress
 ** TODO NEC file generator
