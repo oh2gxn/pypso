@@ -12,25 +12,33 @@ class Yagi:
 
     def __init__(self, matrix, diam=10.0):
         '''Constructs an E-element Yagi antenna based on the given dimensions (where E > 1).
-	   Matrix has Ex2 or Ex3 elements: [pos0, len0, diam0; pos1, len1, diam1...], where 
+	   Matrix has E-by-2 or E-by-3 elements: [pos0, len0, diam0; pos1, len1, diam1...], where 
 	   - pos  :: yagi element position (in mm) on the boom,
            - len  :: yagi element half length (in mm, symmetric),
 	   - diam :: optional yagi element diameter (in mm).
-	   The first element is typically the reflector, the second one is the driven element.'''
+	   The first element is typically the reflector, the second one is the driven element.
+           If the matrix contains only 2 columns, the given default element diameter is used for all elements.'''
+
 	# TODO: check matrix size?
-        self.parameters = matrix
+
+        self.dimensions = matrix
+
 
     def setBoom(self, length, diameter):
         '''Adds the specified boom to the design.'''
 	self.boom = numpy.array([length,diameter])
 
+
     def setHeight(self, height):
         '''Adds a supporting vertical pole and conductive ground.'''
         # TODO
 
+    def read
+
     def fprintNEC(self, fid):
         '''Prints a NEC2 compatible description of the antenna.'''
         # TODO
+
 
     def evaluate(self, criterion):
         '''Runs NEC2 and evaluates the given design criterion.'''

@@ -1,0 +1,106 @@
+#!/usr/bin/python
+# Filename : pypso
+# Author : Janne Toivola, OH2GXN
+# $Id$
+
+# nuts and bolts
+import sys
+import argparse
+import numpy
+
+# GUI
+import Tkinter
+import tkFileDialog
+import tkSimpleDialog
+
+# Yagi-specific stuff
+from yagi import *
+
+class MainWindow:
+    '''The main window.'''
+
+    def __init__(self, master, initial=None):
+        # current state
+        self.currentBest = initial
+
+        # GUI stuff
+        self.root = master
+        self.__setMenus(master)
+        self.__setWindow(master)
+
+    def __setMenus(self, master):
+        # menu bar
+        self.menu = Tkinter.Menu(master)
+        master.config(menu=self.menu)
+
+        # File submenu
+        self.fileMenu = Tkinter.Menu(self.menu)
+        self.menu.add_cascade(label="File", menu=self.fileMenu)
+        self.fileMenu.add_command(label="New...", 
+                                  command=self.newYagi)
+        self.fileMenu.add_command(label="Load initial...", 
+                                  command=self.loadYagi)
+        self.fileMenu.add_command(label="Save...",
+                                  command=self.saveYagi)
+        self.fileMenu.add_command(label="Export NEC...",
+                                  command=self.exportYagi)
+        self.fileMenu.add_command(label="Quit!", 
+                                  command=self.quit)
+
+        # Settings submenu
+        self.setMenu = Tkinter.Menu(self.menu)
+        self.menu.add_cascade(label="Settings", menu=self.setMenu)
+        self.setMenu.add_command(label="About", 
+                                 command=self.about)
+        # TODO...
+
+
+    def __setWindow(self, master):
+        # a frame for all the stuff
+        self.frame = Tkinter.Frame(master)
+        self.frame.bind("<Return>", self.next) # Press enter to simulate a new set of antennas
+        self.frame.pack()
+
+        # TODO: various GUI components
+
+
+    def quit(self):
+        '''Does some clean-up and quits the program.'''
+        # TODO: save something to a file?
+        sys.stderr.write('Bye.')
+        self.frame.quit()
+
+    def report(self, message):
+        '''Sets the status bar.'''
+        self.statusBar.configure(text=message)
+        self.statusBar.update_idletasks()
+
+    def randomize(self):
+        '''Takes the best design and produces a swarm of N perturbed versions of it.'''
+        vector = self.currentBest.toVector()
+        # TODO
+
+
+    def next(self):
+        '''Evaluates the current swarm of designs and performs one step of PSO.'''
+        # TODO: parallel execution?
+
+
+
+if __name__ == '__main__':
+    # TODO: proper argument parsing for loading an initial antenna design
+    for i in sys.argv[1:]:
+        sys.stderr.write('ignored command line argument %s' % i)
+        
+    # the root widget
+    root = Tkinter.Tk()
+    root.title('PyPSO 0.1')
+    
+    # instance of our application
+    win = MainWindow(root)
+    
+    # start the Tkinter event loop
+    root.mainloop()
+
+else:
+    sys.stderr.write('NOTE: %s was not meant to be imported.\n' % __name__)
