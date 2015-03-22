@@ -87,25 +87,33 @@ class Yagi:
         # Geometry
         S = 11 # number of wire segments in simulation
         Z = 0  # default height
-        Xmean = numpy.dot(W[:,0],W[:,1])/numpy.sum(W[:,1]) # approx. CoG
         if self.pole is not None:
             Z = self.pole[0] # + element spacing?
+        if self.boom is not None:
+            # approx. CoG with boom diameter >> element diameter
+            CoG = 0.5*self.boom[0] 
+        else:
+            # approx. CoG with uniform element material
+            CoG = numpy.dot(W[:,0],W[:,1])/numpy.sum(W[:,1])
+            # TODO: better approximations?
+        
+        # Elements: tags [1:E]
         for e in range(0,E):
             # Wire Tag Segs X1 Y1 Z1 X2 Y2 Z2 Radius
             stream.write("GW %d %d %g %g %g %g %g %g %g\n" %
                          ((e+1), S,
-                          W[e,0]-Xmean, -0.5*W[e,1], Z,
-                          W[e,0]-Xmean,  0.5*W[e,1], Z,
+                          W[e,0]-CoG, -0.5*W[e,1], Z,
+                          W[e,0]-CoG,  0.5*W[e,1], Z,
                           W[e,2] * 0.5))
+        # Boom at Y = 0.0, tag = E+1
         if self.boom is not None:
-            # Boom at Y = 0.0, tag = E+1
             stream.write("GW %d %d %g 0.0 %g %g 0.0 %g %g\n" %
                          (E+1), S,
-                         -Xmean, Z,
-                         self.boom[0]-Xmean, Z,
+                         -CoG, Z,
+                         self.boom[0]-CoG, Z,
                          self.boom[1] * 0.5)
+        # Mast at (X,Y) = (0.0,0.0)
         if self.pole is not None:
-            # Mast at (X,Y) = (0.0,0.0)
             stream.write("GW %d %d 0.0 0.0 0.0 0.0 0.0 %g %g\n" %
                          (E+2), S, Z, self.pole[1])
         stream.write("GE 1\n") # Geometry End
@@ -118,8 +126,20 @@ class Yagi:
         # Excitation with voltage source (driven element = tag 2)
         V = (10.0, 0.0) # Volts, no phase considerations
         stream.write("EX 0 %d %d 0 %g %g\n" % (2, (S//2)+1, V[0], V[1]))
+
+        # Wire losses
+        for e in range(0,E):
+            # Loading Type Tag StartSeg EndSeg Conductivity
+            stream.write("LD 5 %d 1 %d %g\n" % ((e+1), S, W[e,3]))
+        # NOTE: possibility for trap coils etc. with Type 4 (R,L,C not Cond)
         
-        # TODO: LD, TL, FR, RP
+        # TODO: Transmission Line: TL Tag1 Seg1 Tag2 Seg2 Z0 Len/VF 0 0 0 0
+        # where the mechanical cable Length is divided with the Velocity Factor
+        # e.g. (abs(W[2,0]-CoG) + Z) / 0.66, but needs to be excited from
+        # an additional wire element Tag1 at the bottom of the mast...
+        # and the match+balun for the driven element???
+        
+        # TODO: FR, RP according to criteria?
 
         stream.write("EN\n") # The End
 
