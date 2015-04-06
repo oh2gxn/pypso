@@ -1,3 +1,5 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
 # Filename : yagi.py
 # Author: Janne Toivola, OH2GXN
 # $Id$
@@ -21,11 +23,14 @@ class Yagi:
            - cond :: optional element conductivity (in S, default Alum.).
 	   The first element is typically the reflector, the second one is
            the driven element. If the matrix contains only 2 columns, the
-           given default element diameter is used for all elements.'''
+           given default element diameter and conductivity are used for all
+           elements.'''
 
         # NOTE: Conductivity of Al is 2.4938e7 Siemens
         
-	# check matrix size, NOTE: does not allow a plain dipole (vector)
+	# Check matrix size
+        # NOTE: Does not allow a plain dipole (vector),
+        #       but the reflector is required
         shape = dimensions.shape
         if (len(shape) != 2):
             raise RuntimeError("Invalid matrix of antenna dimensions: %s" %
@@ -43,37 +48,50 @@ class Yagi:
             matrix[:,2:4] = dimensions[:,2:4]
         matrix[:,1] = dimensions[:,1] # lengths
             
-        # eliminate offset (reflector position == 0)
+        # Eliminate offset (reflector position == 0)
         Xmin = numpy.min(dimensions[:,0])
         matrix[:,0] = dimensions[:,0] - Xmin
         
         self.dimensions = matrix
+        self.boom = None
+        self.pole = None
+        self.directions = None  # TODO
+        self.frequencies = None # TODO
 
 
     def setBoom(self, length, diameter, cond=2.4938e7):
         '''Adds the specified boom to the design.'''
 	self.boom = numpy.array([length,diameter,cond], numpy.float)
 
+    def updateBoom(self, diameter=None, cond=2.4938e7):
+        '''Adds a boom of suitable length to the design (or updates the
+        length, if necessary).'''
+        if diameter is None:
+            d = self.boom[1]
+        else:
+            d = diameter
+        length = (numpy.max(self.dimensions[:,0]) -
+                  numpy.min(self.dimensions[:,0]))
+	self.boom = numpy.array([length,d,cond], numpy.float)
 
     def setPole(self, height, diameter, cond=2.4938e7):
         '''Adds a supporting vertical pole.'''
+        # TODO: a typical yagi is not mounted at the very top
        	self.pole = numpy.array([height,diameter,cond], numpy.float)
 
 
     def toVector(self):
-        '''Represents the free parameters (element len,pos) as a vector.'''
-        return self.dimensions[:,0:2].flatten() # TODO: correct?
+        '''Represents the free parameters (length & position of each element)
+           as a vector. Used for PSO or other algorithms updating the values.'''
+        # TODO: maybe (len0, pos0, len1, pos1,...) is not good?
+        return self.dimensions[:,0:2].flatten()
 
     def fromVector(self, newDimensions):
-        '''Set the free parameters according to updated values.'''
+        '''Set the free parameters according to updated values.
+           NOTE: a setter method – does not create a new yagi object.'''
         E = self.dimensions.shape[0]
-        self.dimensions[:,0:2] = newDimensions.reshape((E,2)) # TODO: correct?
+        self.dimensions[:,0:2] = newDimensions.reshape((E,2))
         
-
-    def readNEC(self, stream):
-        '''Reads other simulation details, like EX & FR, from file'''
-        # TODO
-
 
     def fprintNEC(self, stream):
         '''Prints a NEC2 compatible description of the antenna.'''
@@ -108,23 +126,25 @@ class Yagi:
         # Boom at Y = 0.0, tag = E+1
         if self.boom is not None:
             stream.write("GW %d %d %g 0.0 %g %g 0.0 %g %g\n" %
-                         (E+1), S,
+                         ((E+1), S,
                          -CoG, Z,
                          self.boom[0]-CoG, Z,
-                         self.boom[1] * 0.5)
+                         self.boom[1] * 0.5))
         # Mast at (X,Y) = (0.0,0.0)
         if self.pole is not None:
             stream.write("GW %d %d 0.0 0.0 0.0 0.0 0.0 %g %g\n" %
-                         (E+2), S, Z, self.pole[1])
+                         ((E+2), S, Z, self.pole[1]))
         stream.write("GE 1\n") # Geometry End
 
-        # Ground
-        dielectric   = 13    # TODO: some reasonable value?
-        conductivity = 0.005 # Siemens
-        stream.write("GN 2 0 0 0 %g %g 0 0 0 0\n", dielectric, conductivity)
+        # Ground, if separated by a mast
+        if self.pole is not None:
+            dielectric   = 13    # TODO: is this a reasonable value?
+            conductivity = 0.005 # Siemens
+            stream.write("GN 2 0 0 0 %g %g 0 0 0 0\n" %
+                         (dielectric, conductivity))
 
         # Excitation with voltage source (driven element = tag 2)
-        V = (10.0, 0.0) # Volts, no phase considerations
+        V = (10.0, 0.0) # Volts, no phase considerations, TODO: free parameter
         stream.write("EX 0 %d %d 0 %g %g\n" % (2, (S//2)+1, V[0], V[1]))
 
         # Wire losses
@@ -138,40 +158,70 @@ class Yagi:
         # e.g. (abs(W[2,0]-CoG) + Z) / 0.66, but needs to be excited from
         # an additional wire element Tag1 at the bottom of the mast...
         # and the match+balun for the driven element???
-        
-        # TODO: FR, RP according to criteria?
+
+        # Frequencies
+        # TODO: adjustable frequencies according to evaluation criteria
+        frange = numpy.array([51.410, 0.020, 51.590]) # [min, inc, max] MHz
+        F = int((frange[2] - frange[0])/frange[1] + 1)
+        stream.write("FR 0 %d 0 0 %g %g\n" % (F, frange[0], frange[1]))
+
+        # Report: which directions included in the simulation
+        # TODO: adjustable report according to criteria
+        azimuth  = numpy.array([0.0, 1.0, 360.0]) # [min, inc, max] deg
+        Rz = int((azimuth[2] - azimuth[0])/azimuth[1] + 1)
+        altitude = numpy.array([90.0, 1.0, 90.0]) # NOTE: deg from zenith!
+        Ry = int((altitude[2] - altitude[0])/altitude[1] + 1)
+        stream.write("RP 0 %d %d 1000 %g %g %g %g\n" %
+                     (Ry, Rz, altitude[0], azimuth[0], altitude[1], azimuth[1]))
 
         stream.write("EN\n") # The End
 
 
     def evaluate(self, criterion):
         '''Runs NEC2 and evaluates the given design criterion.'''
-        # TODO: coupled with the NEC RP card?
+        # TODO: criterion coupled with the NEC FR and RP cards?
         return 0.0
 
 
 
 def addParameters(parser):
     '''Command line parameters for stand-alone NEC runs.'''
-    parser.add_argument('file', metavar='file.csv',
+    parser.add_argument('file', metavar='elements.csv',
         help='file with element length,position,[diameter,[conductivity]]')
+    parser.add_argument('-b', '--boom', metavar='length,diameter',
+        help='optional boom length and diameter')
+    parser.add_argument('-p', '--pole', metavar='height,diameter',
+        help='optional antenna mast height and diameter')
+    parser.add_argument('-o', '--output', metavar='yagi.nec',
+        help='optional NEC output file')
     # TODO: others
 
 
 if __name__ == '__main__':
-    # parse command line arguments
+    # Parse command line arguments
     note='Run NEC2 for a given Yagi antenna.'
     parser = argparse.ArgumentParser(description=note)
     addParameters(parser)
     args = parser.parse_args()
 
-    # build the antenna
-    antenna = yagi( numpy.loadtxt( args.file ))
-    # TODO: other parameters
+    # Build the antenna
+    antenna = Yagi( numpy.loadtxt( args.file, delimiter=',' ))
+    if args.boom is not None:
+        len,dia = map(float, args.boom.split(','))
+        antenna.setBoom(len,dia)
+        # TODO: optional length
+    if args.pole is not None:
+        len,dia = map(float, args.pole.split(','))
+        antenna.setPole(len,dia)    
+    # TODO: other parameters?
 
-    # print the NEC stuff
-    antenna.fprintNEC(sys.stdout)
+    # Print the NEC stuff
+    if args.output is None:
+        # TODO: temp file, then run NEC2
+        antenna.fprintNEC(sys.stdout)
+    else:
+        fid = open(args.output, 'w') # TODO: 'wb'?
 
-    # run NEC
-    sys.stderr.write("SWR: %f\n" % antenna.evaluate("SWR"))
+    # TODO: run NEC
+    #sys.stderr.write("SWR: %f\n" % antenna.evaluate("SWR"))
     
