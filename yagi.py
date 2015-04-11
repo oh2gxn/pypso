@@ -240,11 +240,12 @@ if __name__ == '__main__':
     # TODO: other parameters?
 
     # Print the NEC stuff
-    if args.output is None:
-        # TODO: temp file, then run NEC2
-        antenna.fprintNEC(sys.stdout)
-    else:
+    fid = sys.stdout
+    if args.output is not None:
         fid = open(args.output, 'w') # TODO: 'wb'?
+        # TODO: temp file, then run NEC2
+    antenna.fprintNEC(fid)
+    fid.close()
 
     # TODO: run NEC
     #sys.stderr.write("SWR: %f\n" % antenna.evaluate("SWR"))
