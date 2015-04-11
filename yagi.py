@@ -120,7 +120,7 @@ class Yagi:
         
         # Geometry
         S = 11 # number of wire segments in simulation, TODO: dynamic?
-        Z = 1.0 # default height
+        Z = 1.0 # default height, NOTE: elements need Z > 0
         if self.pole[1] > 0.0:
             Z = self.pole[0] # top of the mast
         if self.boom[1] > 0.0:
@@ -128,7 +128,6 @@ class Yagi:
             # TODO: better approximation?
             CoG = 0.5*self.boom[0]
             Zelem = Z + 0.5*self.boom[1] + self.gap + 0.5*numpy.max(W[:,2])
-            # NOTE: would be nice if Z = 0 => Zelem = 0, and the boom is below
         else:
             # approx. CoG with uniform element material
             # TODO: better approximation?
