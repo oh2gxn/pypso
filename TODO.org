@@ -65,8 +65,9 @@ can be easily and quickly made using antenna design software."
 
 
 * Progress
-** TODO NEC file generator
+** DONE NEC file generator
 - learn how to write a yagi description, given element dimensions
+- done in yagi.fprintNEC
 ** TODO NEC result parser
 - see what the output looks like
 ** TODO Evaluation function editor

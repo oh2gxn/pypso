@@ -1,8 +1,9 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-# Filename : yagi.py
-# Author: Janne Toivola, OH2GXN
-# $Id$
+##
+# @file
+# @brief Code for evaluating Yagi-Uda antennas with NEC2
+# @author Janne Toivola, OH2GXN, 2015
 
 import sys
 import numpy
@@ -10,27 +11,31 @@ import argparse
 
 
 class Yagi:
-    '''An object representing a Yagi-Uda antenna and interfacing NEC2 command
-    line program'''
+    """Represents a Yagi-Uda antenna and interfaces NEC2 program."""
 
     def __init__(self, dimensions, diam=0.01, cond=2.4938e7):
-        '''Constructs an E-element Yagi antenna based on the given dimensions
-	   (where E > 1). The parameter is E-by-2, E-by-3, or E-by-4 matrix:
-           [pos0,len0,diam0,cond0; pos1,len1,diam1,cond1...], where
-	   - pos  :: yagi element position (in meters) on the boom,
-           - len  :: element length (in m, symmetric),
-	   - diam :: optional element diameter (in m, default 10mm), and
-           - cond :: optional element conductivity (in S, default Alum.).
-	   The first element is typically the reflector, the second one is
-           the driven element. If the matrix contains only 2 columns, the
-           given default element diameter and conductivity are used for all
-           elements.'''
+        """Constructs a Yagi antenna based on the given dimensions.
+
+        Arguments:
+        dimensions -- a numpy matrix with a row for each element,
+        and 2 to 4 columns:
+	    - element position (in meters) on the boom,
+        - element length (in m, centered / symmetric),
+	    - optional element diameter (in m, default 10mm), and
+        - optional element conductivity (in S, default Al).
+	    The first element is typically a reflector, the second one is
+        the driven element: at least two elements are required.
+
+        diam -- default element diameter, if dimensions.shape[1]<3
+
+        cond -- default element conductivity, if dimensions.shape[1]<4
+        """
 
         # NOTE: Conductivity of Al is 2.4938e7 Siemens
         
-	# Check matrix size
+        # Check matrix size
         # NOTE: Does not allow a plain dipole (vector),
-        #       but the reflector is required
+        #       since the reflector is required
         shape = dimensions.shape
         if (len(shape) != 2):
             raise RuntimeError("Invalid matrix of antenna dimensions: %s" %
@@ -63,31 +68,49 @@ class Yagi:
 
 
     def setBoom(self, length, diameter, gap=0.01, cond=2.4938e7):
-        '''Adds the specified boom to the design.
-        Length, diameter, and gap (to elements) in meters.
-        Zero diameter == no boom.'''
-        self.gap = gap # insulation between elements and boom
-	self.boom = numpy.array([length,diameter,cond], numpy.float)
+        """Adds the specified boom to the design.
 
-    def updateBoom(self, diameter=None, cond=2.4938e7, gap=None):
-        '''Adds a boom of suitable length to the design
-        (or updates the length, if necessary).
-        Zero diameter == no boom, but None re-uses the old diameter.'''
+        Arguments:        
+        length   -- how far the forward end is from the reflector (in m)
+        diameter -- pipe diameter (in m), zero == no boom in simulation
+        gap  -- insulation between the boom and elements (in m)
+        cond -- conductivity of the material (in S)
+        """
+        self.gap = gap # insulation between elements and boom
+        self.boom = numpy.array([length,diameter,cond], numpy.float)
+        # TODO: offset etc.?
+
+    def updateBoom(self, diameter=None, cond=None, gap=None):
+        """Adds or updates a boom of suitable length to the design
+
+        Arguments:
+        diameter -- pipe diameter (in m), 0 == no boom, None == previous
+        cond -- conductivity (in S), None == previous
+        """
         if diameter is None:
             d = self.boom[1]
         else:
             d = diameter
+        if cond is None:
+            c = self.boom[2]
+        else:
+            c = cond
         length = (numpy.max(self.dimensions[:,0]) -
                   numpy.min(self.dimensions[:,0]))
         if d > 0.0:
-            self.boom = numpy.array([length,d,cond], numpy.float)
+            self.boom = numpy.array([length,d,c], numpy.float)
         else:
             self.gap  = 0.0
             self.boom = numpy.zeros(3, numpy.float)
 
     def setPole(self, height, diameter, cond=2.4938e7):
-        '''Adds a supporting vertical pole.
-        Zero diameter or height => no pole.'''
+        """Adds a supporting vertical pole.
+
+        Arguments:
+        height -- level of yagi boom from the ground in m, 0 => boom at ground
+        diameter -- pipe diameter in m, 0 => boom at ground
+        cond -- conductivity in S
+        """
         # TODO: a typical yagi is not mounted at the very top
         if (height > 0.0 and diameter > 0.0):
             self.pole = numpy.array([height,diameter,cond], numpy.float)
@@ -96,26 +119,28 @@ class Yagi:
 
 
     def toVector(self):
-        '''Represents the free parameters (length & position of each element)
-           as a vector. Used for PSO or other algorithms updating the values.'''
+        """Represents the length & position of each element as a vector.
+        Used for PSO or other algorithms updating the free parameters.
+        """
         # TODO: maybe (len0, pos0, len1, pos1,...) is not good?
         return self.dimensions[:,0:2].flatten()
 
     def updateFromVector(self, newDimensions):
-        '''Set the free parameters according to updated values.
-           NOTE: a setter method – does not create a new yagi object.'''
+        """Set the free parameters according to updated values.
+        NOTE: a setter method – does not create a new yagi object.
+        """
         E = self.dimensions.shape[0]
         self.dimensions[:,0:2] = newDimensions.reshape((E,2))
         
 
     def fprintNEC(self, stream):
-        '''Prints a NEC2 compatible description of the antenna.'''
+        """Prints a NEC2 compatible description of the antenna."""
         
         # Comment lines and Comment End
         W = self.dimensions # shorter name for wires
         E = W.shape[0]
         stream.write("CM %d-el yagi: " % E)
-        stream.write("NEC file generated by yagi.py -OH2GXN\n")
+        stream.write("NEC file generated by yagi.py by OH2GXN\n")
         stream.write("CE\n")
         
         # Geometry
@@ -133,8 +158,7 @@ class Yagi:
             # TODO: better approximation?
             CoG = numpy.dot(W[:,0],W[:,1])/numpy.sum(W[:,1])
             Zelem = Z
-            
-        
+                    
         # Elements: tags [1:E]
         for e in range(0,E):
             # NOTE: element centers at the same plane Z=Zelem
@@ -200,16 +224,18 @@ class Yagi:
 
         stream.write("EN\n") # The End
 
-
     def evaluate(self, criterion):
-        '''Runs NEC2 and evaluates the given design criterion.'''
+        """Runs NEC2 and evaluates the given design criterion."""
         # TODO: criterion coupled with the NEC FR and RP cards?
         return 0.0
 
 
-
-def addParameters(parser):
-    '''Command line parameters for stand-alone NEC runs.'''
+#####
+# For using this stuff "stand-alone" from command line:
+if __name__ == '__main__':
+    # Parse command line arguments
+    note='Run NEC2 for a given Yagi antenna.'
+    parser = argparse.ArgumentParser(description=note)
     parser.add_argument('file', metavar='elements.csv',
         help='file with element length,position,[diameter,[conductivity]]')
     parser.add_argument('-b', '--boom', metavar='length,diameter',
@@ -219,13 +245,6 @@ def addParameters(parser):
     parser.add_argument('-o', '--output', metavar='yagi.nec',
         help='optional NEC output file')
     # TODO: others
-
-
-if __name__ == '__main__':
-    # Parse command line arguments
-    note='Run NEC2 for a given Yagi antenna.'
-    parser = argparse.ArgumentParser(description=note)
-    addParameters(parser)
     args = parser.parse_args()
 
     # Build the antenna
