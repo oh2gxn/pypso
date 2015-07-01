@@ -86,6 +86,7 @@ class Yagi:
         Arguments:
         diameter -- pipe diameter (in m), 0 == no boom, None == previous
         cond -- conductivity (in S), None == previous
+        gap -- center-to-center distance between the elements and boom (in m)
         """
         if diameter is None:
             d = self.boom[1]
@@ -95,9 +96,13 @@ class Yagi:
             c = self.boom[2]
         else:
             c = cond
+        if gap is not None:
+            g = gap
+        # automatic length:
         length = (numpy.max(self.dimensions[:,0]) -
                   numpy.min(self.dimensions[:,0]))
         if d > 0.0:
+            self.gap  = g
             self.boom = numpy.array([length,d,c], numpy.float)
         else:
             self.gap  = 0.0
@@ -214,6 +219,7 @@ class Yagi:
         stream.write("FR 0 %d 0 0 %g %g\n" % (F, frange[0], frange[1]))
 
         # Report: which directions included in the simulation
+        # FIXME: bigger increments, 1.0 deg => 38MB of text @ output
         # TODO: adjustable report according to criteria
         azimuth  = numpy.array([0.0, 1.0, 360.0]) # [min, inc, max] deg
         Rz = int((azimuth[2] - azimuth[0])/azimuth[1] + 1)
@@ -227,6 +233,17 @@ class Yagi:
     def evaluate(self, criterion):
         """Runs NEC2 and evaluates the given design criterion."""
         # TODO: criterion coupled with the NEC FR and RP cards?
+
+        # Example output from NEC2C, for each FR:
+        # ...
+        # ---------- POWER BUDGET ---------
+        # INPUT POWER   =  5.4174E-02 Watts
+        # RADIATED POWER=  4.8132E-02 Watts
+        # STRUCTURE LOSS=  6.0415E-03 Watts
+        # NETWORK LOSS  =  0.0000E+00 Watts
+        # EFFICIENCY    =   88.85 Percent
+        # ...
+        
         return 0.0
 
 
