@@ -8,10 +8,12 @@ import sys
 import argparse
 import numpy
 
-# GUI
+# GUI and plots
 import Tkinter
 import tkFileDialog
 import tkSimpleDialog
+import pylab
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2TkAgg
 
 # Yagi-specific stuff
 from yagi import *
@@ -22,6 +24,9 @@ class MainWindow:
     def __init__(self, master, initial=None):
         # current state
         self.currentBest = initial
+        self.swarm  = None
+        self.swarmX = None
+        self.swarmV = None
 
         # GUI stuff
         self.root = master
@@ -68,23 +73,54 @@ class MainWindow:
         '''Does some clean-up and quits the program.'''
         # TODO: save something to a file?
         sys.stderr.write('Bye.')
-        self.frame.quit()
+        self.root.quit()
+        self.root.destroy()
 
     def report(self, message):
         '''Sets the status bar.'''
         self.statusBar.configure(text=message)
         self.statusBar.update_idletasks()
 
-    def randomize(self):
+
+    def randomize(self, N, sigma):
         '''Takes the best design and produces a swarm of N perturbed versions of it.'''
+        if self.currentBest is None:
+            self.loadYagi()
         vector = self.currentBest.toVector()
-        # TODO
+        M = vector.shape[0]
+        self.swarmX = numpy.zeros((N, M), numpy.float)
+        self.swarmV = numpy.zeros((N, M), numpy.float)
+        self.swarmX[0,:] = vector
+        self.swarmV[0,:] = numpy.zeros_like(vector)
+        self.swarm = [self.currentBest]
+        for n in range(1,N):
+            anotherX = numpy.zeros_like(vector)
+            anotherV = numpy.zeros_like(vector)
+            for m in range (0,M):
+                anotherX[m] = 1.0 * numpy.randn(0,sigma) * vector[m]
+                anotherV[m] = 0.1 * numpy.randn(0,sigma) * vector[m]
+            self.swarmX[n,:] = anotherX
+            self.swarmV[n,:] = anotherV
+            self.swarm.append(self.currentBest.fromVector(anotherX))
 
 
     def next(self):
-        '''Evaluates the current swarm of designs and performs one step of PSO.'''
+        '''Evaluates the current swarm of designs and performs one step of
+        Particle Swarm Optimization.'''
         # TODO: parallel execution?
-
+        N = self.swarm.shape[0]
+        evaluations = numpy.zeros(N, numpy.float)
+        bestVal = 0
+        bestInd = 0
+        for n in range(0,N):
+            current = self.swarm[n].evaluate() # TODO: criterion?
+            evaluations[n] = current
+            if current > bestVal:
+                bestVal = current
+                bestInd = n
+        # TODO: accelerate swarmV towards n (gravitation)
+        # TODO: update swarmX by swarmV
+        # TODO: update swarm from swarmX
 
 
 if __name__ == '__main__':
