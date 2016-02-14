@@ -186,11 +186,16 @@ class Yagi:
                          ((E+2), S, self.pole[0], self.pole[1] * 0.5))
         stream.write("GE 1\n") # Geometry End
 
-        # Ground
+        # Ground:
+        # - type -1: free space
+        # - type 0: finite ground with a reflection coefficient approximation
+        # - type 1: perfectly conducting ground
+        # - type 2: finite ground using the Sommerfeld-Norton method
+        gntype = -1
         dielectric   = 13    # TODO: is this a reasonable value?
         conductivity = 0.005 # Siemens
-        stream.write("GN 2 0 0 0 %g %g 0 0 0 0\n" %
-                     (dielectric, conductivity))
+        stream.write("GN %d 0 0 0 %g %g 0 0 0 0\n" %
+                     (gntype, dielectric, conductivity))
 
         # Excitation with voltage source (driven element = tag 2)
         V = (10.0, 0.0) # Volts, no phase considerations, TODO: free parameter
@@ -214,17 +219,21 @@ class Yagi:
 
         # Frequencies
         # TODO: adjustable frequencies according to evaluation criteria
-        frange = numpy.array([51.410, 0.020, 51.590]) # [min, inc, max] MHz
-        F = int((frange[2] - frange[0])/frange[1] + 1)
+        # IARU Region 1 Band Plan:
+        # - SSB: 50.100 - 50.200 MHz
+        # - FM simplex: 51.410 - 51.590 MHz, 51.510 MHz calling freq.
+        #frange = numpy.array([51.410, 0.020, 51.590]) # [min, inc, max] MHz
+        frange = numpy.array([51.510, 0.020, 51.510]) # [min, inc, max] MHz
+        F = int((frange[2] - frange[0])/frange[1] + 1) # increment > 0 !
         stream.write("FR 0 %d 0 0 %g %g\n" % (F, frange[0], frange[1]))
 
         # Report: which directions included in the simulation
         # FIXME: bigger increments, 1.0 deg => 38MB of text @ output
         # TODO: adjustable report according to criteria
         azimuth  = numpy.array([0.0, 1.0, 360.0]) # [min, inc, max] deg
-        Rz = int((azimuth[2] - azimuth[0])/azimuth[1] + 1)
-        altitude = numpy.array([1.0, 1.0, 90.0]) # NOTE: deg from zenith!
-        Ry = int((altitude[2] - altitude[0])/altitude[1] + 1)
+        Rz = int((azimuth[2] - azimuth[0])/azimuth[1]) # +1?
+        altitude = numpy.array([0.0, 1.0, 90.0]) # NOTE: deg from zenith!
+        Ry = int((altitude[2] - altitude[0])/altitude[1] + 1) # +1
         stream.write("RP 0 %d %d 1000 %g %g %g %g\n" %
                      (Ry, Rz, altitude[0], azimuth[0], altitude[1], azimuth[1]))
 
