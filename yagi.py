@@ -11,7 +11,7 @@ import argparse
 
 
 class Yagi:
-    """Represents a Yagi-Uda antenna and interfaces NEC2 program."""
+    """Represents a Yagi-Uda antenna and interfaces the NEC2 simulator."""
 
     def __init__(self, dimensions, diam=0.01, cond=2.4938e7):
         """Constructs a Yagi antenna based on the given dimensions.
@@ -19,11 +19,12 @@ class Yagi:
         Arguments:
         dimensions -- a numpy matrix with a row for each element,
         and 2 to 4 columns:
-	    - element position (in meters) on the boom,
+	- element position (in meters) on the boom,
         - element length (in m, centered / symmetric),
-	    - optional element diameter (in m, default 10mm), and
+	- optional element diameter (in m, default 10mm), and
         - optional element conductivity (in S, default Al).
-	    The first element is typically a reflector, the second one is
+
+	The first element is typically a reflector, the second one is
         the driven element: at least two elements are required.
 
         diam -- default element diameter, if dimensions.shape[1]<3
@@ -67,11 +68,17 @@ class Yagi:
         self.frequencies = None # TODO
 
     # TODO: __init__(filename) for loading from file..?
+    @staticmethod
+    def loadCSV(filename):
+        return Yagi( numpy.loadtxt( filename, delimiter=',' ))
+        
+    def saveCSV(self, filename):
+        numpy.savetxt( filename, delimiter=',' )
         
 
     def copy(self):
         """Creates a full copy of this object."""
-        cp = yagi(self.dimensions)
+        cp = Yagi(self.dimensions)
         cp.gap = self.gap
         cp.boom = numpy.copy(self.boom)
         cp.pole = numpy.copy(self.pole)
@@ -109,7 +116,9 @@ class Yagi:
             c = self.boom[2]
         else:
             c = cond
-        if gap is not None:
+        if gap is None:
+            g = self.gap
+        else:
             g = gap
         # automatic length:
         length = (numpy.max(self.dimensions[:,0]) -
@@ -158,6 +167,7 @@ class Yagi:
         """
         E = self.dimensions.shape[0]
         self.dimensions[:,0:2] = newDimensions.reshape((E,2))
+        self.updateBoom()
         
 
     def fprintNEC(self, stream):
@@ -261,6 +271,7 @@ class Yagi:
 
         stream.write("EN\n") # The End
 
+
     def evaluate(self, criterion):
         """Runs NEC2 and evaluates the given design criterion."""
         # TODO: criterion coupled with the NEC FR and RP cards?
@@ -274,8 +285,11 @@ class Yagi:
         # NETWORK LOSS  =  0.0000E+00 Watts
         # EFFICIENCY    =   88.85 Percent
         # ...
-        
-        return 0.0
+
+        # just some test expression:
+        weight = numpy.sum( numpy.multiply( self.dimensions[:,0], 
+                                            self.dimensions[:,1] ))
+        return eval(criterion)
 
 
 #####
@@ -296,14 +310,14 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # Build the antenna
-    antenna = Yagi( numpy.loadtxt( args.file, delimiter=',' ))
+    antenna = Yagi.loadCSV( args.file )
     if args.boom is not None:
-        len,dia = map(float, args.boom.split(','))
-        antenna.setBoom(len,dia)
+        length,diameter = map(float, args.boom.split(','))
+        antenna.setBoom(length,diameter)
         # TODO: optional length
     if args.pole is not None:
-        len,dia = map(float, args.pole.split(','))
-        antenna.setPole(len,dia)    
+        length,diameter = map(float, args.pole.split(','))
+        antenna.setPole(length,diameter)    
     # TODO: other parameters?
 
     # Print the NEC stuff

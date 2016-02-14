@@ -23,11 +23,15 @@ title = 'PyPSO 0.1'
 
 class PSOsettings:
     """Parameters related to running Particle Swarm Optimization."""
-    def __init__(self, particles=10, width=1.0, greed=0.5, trust=0.5)
+    def __init__(self, particles=10, width=1.0, greed=0.5, trust=0.5):
         self.N = particles # number of particles
         self.W = width     # relative width of initial cloud of particles
         self.G = greed     # factor for (1 - inertia)
         self.T = trust     # update factor between personal and global best
+        self.criterion = 'weight' # Python expression evaluated by particles
+
+    def setCriterion( expression ):
+        self.criterion = expression
 
                 
 class MainWindow:
@@ -36,6 +40,7 @@ class MainWindow:
     def __init__(self, master):
         # current state
         self.__reset()
+        self.pso = PSOsettings() # TODO: GUI window for setting these
 
         # GUI stuff
         self.root = master
@@ -160,7 +165,7 @@ class MainWindow:
         """Dialog for loading the initial guess from a file."""
         if filename is None:
             filename = tkFileDialog.askopenfilename(**self.loadOptions)
-        guess = Yagi( numpy.loadtxt( filename, delimiter=',' ) ) # FIXME
+        guess = Yagi.loadCSV( filename )
         self.swarm = [guess]
         self.currentBest = 0
         self.report("Current guess loaded from %s." % filename)
@@ -170,8 +175,7 @@ class MainWindow:
     def save(self):
         """Dialog for saving the current best dimension vector to a CSV file."""
         filename = tkFileDialog.asksaveasfilename(**self.saveOptions)
-        numpy.savetxt(filename, self.swarm[self.currentBest].toVector)
-        # FIXME: this loses the matrix shape... better format?
+        self.swarm[self.currentBest].saveCSV( filename )
         self.report("Current best saved to %s." % filename)
 
 
@@ -209,14 +213,15 @@ class MainWindow:
             self.load()
         vector = self.swarm[self.currentBest].toVector()
         M = vector.shape[0]
-        self.swarmX = X = numpy.zeros((N, M), numpy.float)
-        self.swarmP = P = numpy.zeros((N, M), numpy.float)
-        self.swarmV = V = numpy.zeros((N, M), numpy.float)
+        self.swarmX = X  = numpy.zeros((N, M), numpy.float)
+        self.swarmP = P  = numpy.zeros((N, M), numpy.float)
+        self.swarmV = V  = numpy.zeros((N, M), numpy.float)
         self.data = data = numpy.zeros((N, 1), numpy.float)
         X[0,:] = vector
         P[0,:] = vector
         V[0,:] = numpy.zeros_like(vector)
-        data[0,0] = self.swarm[self.currentBest].evaluate() # FIXME
+        self.report("Evaluating initial guess...")
+        data[0,0] = self.swarm[self.currentBest].evaluate(self.pso.criterion)
         for n in range(1,N):
             anotherX = numpy.zeros_like(vector)
             anotherV = numpy.zeros_like(vector)
@@ -224,33 +229,40 @@ class MainWindow:
                 anotherX[m] = 1.0 * sigma * numpy.random.rand() * vector[m]
                 anotherV[m] = 0.1 * sigma * numpy.random.rand() * vector[m]
             another = self.swarm[self.currentBest].fromVector(anotherX)
-            swarm.append(another)
+            self.swarm.append(another)
             X[n,:] = anotherX
             P[n,:] = anotherX
             V[n,:] = anotherV
-            data[n,0] = another.evaluate() # FIXME
+            self.report("Evaluating particle %d / %d..." % (n+1,N))
+            data[n,0] = another.evaluate(self.pso.criterion)
+        self.report("Random swarm of particles ready.")
+        self.nButton.config(state=Tkinter.NORMAL)
+        self.lines = self.ax.plot(numpy.ones((N,1)), self.data[:,0], 'o')
+        #self.ax.axis()
 
 
     def next(self):
         """Evaluates the current swarm of designs and performs one step of
         Particle Swarm Optimization."""
         # TODO: parallel execution?
-        if self.swarm is None:
-            sys.stderr.write("You must load an initial guess first.\n")
+        if self.swarmX is None:
+            sys.stderr.write("You must load and randomize first.\n")
             return
-        N = self.swarm.shape[0]
-        evaluations = numpy.zeros(N, numpy.float)
-        bestVal = 0 # FIXME: MAX?
-        bestInd = 0 # FIXME: MAX?
+        N = self.swarmX.shape[0]
+
+        # Phase 0: check which one is the current best
+        bestValue = numpy.min(self.data[self.currentBest,:]) # TODO: store?
         for n in range(0,N):
-            current = self.swarm[n].evaluate() # TODO: criterion?
-            evaluations[n] = current
-            if current > bestVal:
-                bestVal = current
-                bestInd = n
-        # TODO: accelerate swarmV towards n (gravitation)
+            personalBest = numpy.min(self.data[n,:]) # FIXME: check only news?
+            if personalBest < bestValue:
+                bestValue = personalBest
+                self.currentBest = n
+        self.report("Particle %d seems best so far: %g" % 
+                    (self.currentBest, bestValue))
+        # TODO: accelerate swarmV towards currentBest (gravitation)
         # TODO: update swarmX by swarmV
         # TODO: update swarm from swarmX
+        # TODO: evaluate each new particle and append to self.data
 
 
 if __name__ == '__main__':
