@@ -67,6 +67,17 @@ class Yagi:
         self.frequencies = None # TODO
 
 
+    def copy(self):
+        """Creates a full copy of this object."""
+        cp = yagi(self.dimensions)
+        cp.gap = self.gap
+        cp.boom = numpy.copy(self.boom)
+        cp.pole = numpy.copy(self.pole)
+        cp.directions  = numpy.copy(self.directions)
+        cp.frequencies = numpy.copy(self.frequencies)
+        return cp
+
+
     def setBoom(self, length, diameter, gap=0.01, cond=2.4938e7):
         """Adds the specified boom to the design.
 
@@ -123,12 +134,21 @@ class Yagi:
             self.pole = numpy.zeros(3, numpy.float)
 
 
+
     def toVector(self):
         """Represents the length & position of each element as a vector.
         Used for PSO or other algorithms updating the free parameters.
         """
         # TODO: maybe (len0, pos0, len1, pos1,...) is not good?
         return self.dimensions[:,0:2].flatten()
+
+    def fromVector(self, dimensions):
+        """Creates a new yagi object according to a given vector.
+        Useful for initializing PSO with a set of randomized yagis.
+        """
+        newYagi = self.copy()
+        newYagi.updateFromVector(dimensions)
+        return newYagi
 
     def updateFromVector(self, newDimensions):
         """Set the free parameters according to updated values.
