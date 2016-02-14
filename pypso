@@ -18,20 +18,24 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 # Yagi-specific stuff
 from yagi import *
 
+title = 'PyPSO 0.1'
+
 class MainWindow:
     '''The main window.'''
 
-    def __init__(self, master, initial=None):
+    def __init__(self, master):
         # current state
-        self.currentBest = initial
+        self.currentBest = None
         self.swarm  = None
         self.swarmX = None
         self.swarmV = None
+        self.data = None
 
         # GUI stuff
         self.root = master
         self.__setMenus(master)
         self.__setWindow(master)
+
 
     def __setMenus(self, master):
         # menu bar
@@ -39,16 +43,34 @@ class MainWindow:
         master.config(menu=self.menu)
 
         # File submenu
+        self.loadOptions = opts = {}
+        opts['defaultextension'] = '.csv' # or .nec ?
+        opts['filetypes'] = [('all files', '.*'),('dimension tables', '.csv')]
+        opts['parent'] = master
+        opts['title'] = 'Load initial guess'
+
+        self.saveOptions = opts = {}
+        opts['defaultextension'] = '.csv' # or .nec ?
+        opts['filetypes'] = [('all files', '.*'),('dimension tables', '.csv')]
+        opts['parent'] = master
+        opts['title'] = 'Save current best'
+
+        self.exportOptions = opts = {}
+        opts['defaultextension'] = '.nec'
+        opts['filetypes'] = [('all files', '.*'),('NEC files', '.nec')]
+        opts['parent'] = master
+        opts['title'] = 'Export current best'
+
         self.fileMenu = Tkinter.Menu(self.menu)
         self.menu.add_cascade(label="File", menu=self.fileMenu)
         self.fileMenu.add_command(label="New...", 
-                                  command=self.newYagi)
+                                  command=self.new)
         self.fileMenu.add_command(label="Load initial...", 
-                                  command=self.loadYagi)
+                                  command=self.load)
         self.fileMenu.add_command(label="Save...",
-                                  command=self.saveYagi)
+                                  command=self.save)
         self.fileMenu.add_command(label="Export NEC...",
-                                  command=self.exportYagi)
+                                  command=self.export)
         self.fileMenu.add_command(label="Quit!", 
                                   command=self.quit)
 
@@ -62,56 +84,139 @@ class MainWindow:
 
     def __setWindow(self, master):
         # a frame for all the stuff
-        self.frame = Tkinter.Frame(master)
-        self.frame.bind("<Return>", self.next) # Press enter to simulate a new set of antennas
-        self.frame.pack()
+        self.frame = frame = Tkinter.Frame(master)
+        frame.bind("<Return>", self.next) # Press enter to progress
+        frame.pack()
 
-        # TODO: various GUI components
+        # TODO: a canvas for plotting stuff?
+        self.figure = fig = pylab.figure(1)
+        self.ax = ax = fig.add_subplot(111)
+        ax.grid(True)
+        ax.set_title("Progress of the optimization")
+        ax.set_xlabel("Iteration")
+        ax.set_ylabel("Evaluation")
+        ax.axis([0,10,0,10]) # TODO: better ideas?
+        self.lines = None # ax.plot(self.data, '-')
+        self.canvas = canvas = FigureCanvasTkAgg(fig, frame)
+        canvas.show()
+        canvas.get_tk_widget().pack(side=Tkinter.TOP, fill=Tkinter.BOTH, 
+                                    expand=1)
+        self.toolbar = NavigationToolbar2TkAgg(canvas, frame)
+        self.toolbar.update()
+        canvas._tkcanvas.pack(side=Tkinter.TOP, fill=Tkinter.BOTH, expand=1)
+
+        # a button for randomizing the current guess
+        self.rButton = Tkinter.Button(self.frame,\
+                                      name='rbutton',\
+                                      text='Randomize',\
+                                      command=self.randomize)
+        self.rButton.pack(side=Tkinter.LEFT)
+        # TODO: enabled at first, disabled then
+
+        # a button for advancing the optimization for one interation
+        self.nButton = Tkinter.Button(self.frame,\
+                                      name='nbutton',\
+                                      text='Next step',\
+                                      command=self.next)
+        self.nButton.pack(side=Tkinter.RIGHT)
+        # TODO: disabled at first, enabled after randomize
+
+        # status bar
+        self.statusBar = Tkinter.Label(master, text="", bd=1, 
+                                       relief=Tkinter.SUNKEN, 
+                                       anchor=Tkinter.W)
+        self.statusBar.pack(side=Tkinter.BOTTOM, fill=Tkinter.X)
+
+
+
+    def new(self):
+        """TODO: a dialog for a new Yagi..?"""
+        sys.stderr.write("Error: fancy GUI not implemented yet. Use load.\n")
+        # TODO
+
+
+    def load(self, filename=None):
+        """Dialog for loading the initial Yagi from a file."""
+        if filename is None:
+            filename = tkFileDialog.askopenfilename(**self.loadOptions)
+        guess = Yagi( numpy.loadtxt( filename, delimiter=',' ) ) # FIXME
+        self.currentBest = guess
+        self.report("Current guess loaded from %s." % filename)
+
+
+    def save(self):
+        """Dialog for saving the current best dimension vector to a CSV file."""
+        filename = tkFileDialog.asksaveasfilename(**self.saveOptions)
+        numpy.savetxt(filename, self.currentBest.toVector)
+        # FIXME: this loses the matrix shape... better format?
+        self.report("Current best saved to %s." % filename)
+
+
+    def export(self):
+        filename = tkFileDialog.asksaveasfilename(**self.exportOptions)
+        fid = open(filename, 'w')
+        self.currentBest.fprintNEC(fid)
+        fid.close()
+        self.report("Current best saved to %s." % filename)
+
+
+    def about(self):
+        """Shows some basic info."""
+        sys.stderr.write("%s\n" % title) # TODO: GUI window
 
 
     def quit(self):
-        '''Does some clean-up and quits the program.'''
+        """Does some clean-up and quits the program."""
         # TODO: save something to a file?
-        sys.stderr.write('Bye.')
+        sys.stderr.write('Bye.\n')
         self.root.quit()
         self.root.destroy()
 
+
     def report(self, message):
-        '''Sets the status bar.'''
+        """Sets the status bar."""
         self.statusBar.configure(text=message)
         self.statusBar.update_idletasks()
 
 
-    def randomize(self, N, sigma):
-        '''Takes the best design and produces a swarm of N perturbed versions of it.'''
+    def randomize(self, N=10, sigma=1.0):
+        """Takes the best design and produces a swarm of N
+        perturbed versions of it."""
         if self.currentBest is None:
-            self.loadYagi()
+            self.load()
         vector = self.currentBest.toVector()
         M = vector.shape[0]
-        self.swarmX = numpy.zeros((N, M), numpy.float)
-        self.swarmV = numpy.zeros((N, M), numpy.float)
-        self.swarmX[0,:] = vector
-        self.swarmV[0,:] = numpy.zeros_like(vector)
-        self.swarm = [self.currentBest]
+        self.swarm  = swarm = [self.currentBest]
+        self.swarmX = X = numpy.zeros((N, M), numpy.float)
+        self.swarmV = V = numpy.zeros((N, M), numpy.float)
+        self.data = data = numpy.zeros((N, 1), numpy.float)
+        X[0,:] = vector
+        V[0,:] = numpy.zeros_like(vector)
+        data[0,0] = self.currentBest.evaluate() # FIXME
         for n in range(1,N):
             anotherX = numpy.zeros_like(vector)
             anotherV = numpy.zeros_like(vector)
             for m in range (0,M):
-                anotherX[m] = 1.0 * numpy.randn(0,sigma) * vector[m]
-                anotherV[m] = 0.1 * numpy.randn(0,sigma) * vector[m]
-            self.swarmX[n,:] = anotherX
-            self.swarmV[n,:] = anotherV
-            self.swarm.append(self.currentBest.fromVector(anotherX))
+                anotherX[m] = 1.0 * sigma * numpy.random.randn() * vector[m]
+                anotherV[m] = 0.1 * sigma * numpy.random.randn() * vector[m]
+            another = self.currentBest.fromVector(anotherX)
+            swarm.append(another)
+            X[n,:] = anotherX
+            V[n,:] = anotherV
+            data[n,0] = another.evaluate() # FIXME
 
 
     def next(self):
-        '''Evaluates the current swarm of designs and performs one step of
-        Particle Swarm Optimization.'''
+        """Evaluates the current swarm of designs and performs one step of
+        Particle Swarm Optimization."""
         # TODO: parallel execution?
+        if self.swarm is None:
+            sys.stderr.write("You must load an initial guess first.\n")
+            return
         N = self.swarm.shape[0]
         evaluations = numpy.zeros(N, numpy.float)
-        bestVal = 0
-        bestInd = 0
+        bestVal = 0 # FIXME: MAX?
+        bestInd = 0 # FIXME: MAX?
         for n in range(0,N):
             current = self.swarm[n].evaluate() # TODO: criterion?
             evaluations[n] = current
@@ -124,16 +229,26 @@ class MainWindow:
 
 
 if __name__ == '__main__':
-    # TODO: proper argument parsing for loading an initial antenna design
-    for i in sys.argv[1:]:
-        sys.stderr.write('ignored command line argument %s' % i)
+    # Command line arguments
+    note = 'A program for running Particle Swarm Optimization for yagis'
+    parser = argparse.ArgumentParser(description=note)
+    parser.add_argument('file', nargs='?', metavar='elements.csv',
+        help='file with element length,position,[diameter,[conductivity]]')
+    parser.add_argument('-b', '--boom', metavar='length,diameter',
+        help='optional boom length and diameter')
+    parser.add_argument('-p', '--pole', metavar='height,diameter',
+        help='optional antenna mast height and diameter')
+    args = parser.parse_args()
         
     # the root widget
     root = Tkinter.Tk()
-    root.title('PyPSO 0.1')
+    root.title(title)
     
     # instance of our application
     win = MainWindow(root)
+    if args.file is not None:
+        win.load(filename=args.file)
+    # FIXME: so how to set boom & pole etc.?
     
     # start the Tkinter event loop
     root.mainloop()
