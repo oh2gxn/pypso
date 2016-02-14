@@ -20,23 +20,38 @@ from yagi import *
 
 title = 'PyPSO 0.1'
 
+
+class PSOsettings:
+    """Parameters related to running Particle Swarm Optimization."""
+    def __init__(self, particles=10, width=1.0, greed=0.5, trust=0.5)
+        self.N = particles # number of particles
+        self.W = width     # relative width of initial cloud of particles
+        self.G = greed     # factor for (1 - inertia)
+        self.T = trust     # update factor between personal and global best
+
+                
 class MainWindow:
-    '''The main window.'''
+    """The main window."""
 
     def __init__(self, master):
         # current state
-        self.currentBest = None
-        self.swarm  = None
-        self.swarmX = None
-        self.swarmV = None
-        self.data = None
+        self.__reset()
 
         # GUI stuff
         self.root = master
         self.__setMenus(master)
         self.__setWindow(master)
 
+        
+    def __reset(self):
+        self.currentBest = 0 # index of the particle with global best
+        self.swarm  = None   # list of all particles, or None
+        self.swarmX = None   # current state of each particle
+        self.swarmP = None   # personal best state of each particle
+        self.swarmV = None   # current velocity of each particle
+        self.data   = None   # evaluations of the particles for each iteration
 
+        
     def __setMenus(self, master):
         # menu bar
         self.menu = Tkinter.Menu(master)
@@ -79,7 +94,7 @@ class MainWindow:
         self.menu.add_cascade(label="Settings", menu=self.setMenu)
         self.setMenu.add_command(label="About", 
                                  command=self.about)
-        # TODO...
+        # TODO: configuration window for PSOsettings
 
 
     def __setWindow(self, master):
@@ -88,7 +103,7 @@ class MainWindow:
         frame.bind("<Return>", self.next) # Press enter to progress
         frame.pack()
 
-        # TODO: a canvas for plotting stuff?
+        # a canvas for plotting evaluation history
         self.figure = fig = pylab.figure(1)
         self.ax = ax = fig.add_subplot(111)
         ax.grid(True)
@@ -109,7 +124,8 @@ class MainWindow:
         self.rButton = Tkinter.Button(self.frame,\
                                       name='rbutton',\
                                       text='Randomize',\
-                                      command=self.randomize)
+                                      command=self.randomize,
+                                      state=Tkinter.DISABLED)
         self.rButton.pack(side=Tkinter.LEFT)
         # TODO: enabled at first, disabled then
 
@@ -117,7 +133,8 @@ class MainWindow:
         self.nButton = Tkinter.Button(self.frame,\
                                       name='nbutton',\
                                       text='Next step',\
-                                      command=self.next)
+                                      command=self.next,
+                                      state=Tkinter.DISABLED)
         self.nButton.pack(side=Tkinter.RIGHT)
         # TODO: disabled at first, enabled after randomize
 
@@ -130,24 +147,30 @@ class MainWindow:
 
 
     def new(self):
-        """TODO: a dialog for a new Yagi..?"""
+        """TODO: a dialog for a starting with a new guess..?"""
         sys.stderr.write("Error: fancy GUI not implemented yet. Use load.\n")
-        # TODO
+        self.rButton.config(state=Tkinter.DISABLED)
+        self.nButton.config(state=Tkinter.DISABLED)
+        self.__reset()
+        # TODO: clear the plot too!
+        # TODO: ask for number of elements and frequency band?
 
 
     def load(self, filename=None):
-        """Dialog for loading the initial Yagi from a file."""
+        """Dialog for loading the initial guess from a file."""
         if filename is None:
             filename = tkFileDialog.askopenfilename(**self.loadOptions)
         guess = Yagi( numpy.loadtxt( filename, delimiter=',' ) ) # FIXME
-        self.currentBest = guess
+        self.swarm = [guess]
+        self.currentBest = 0
         self.report("Current guess loaded from %s." % filename)
-
+        self.rButton.config(state=Tkinter.NORMAL)
+        
 
     def save(self):
         """Dialog for saving the current best dimension vector to a CSV file."""
         filename = tkFileDialog.asksaveasfilename(**self.saveOptions)
-        numpy.savetxt(filename, self.currentBest.toVector)
+        numpy.savetxt(filename, self.swarm[self.currentBest].toVector)
         # FIXME: this loses the matrix shape... better format?
         self.report("Current best saved to %s." % filename)
 
@@ -155,14 +178,14 @@ class MainWindow:
     def export(self):
         filename = tkFileDialog.asksaveasfilename(**self.exportOptions)
         fid = open(filename, 'w')
-        self.currentBest.fprintNEC(fid)
+        self.swarm[self.currentBest].fprintNEC(fid)
         fid.close()
         self.report("Current best saved to %s." % filename)
 
 
     def about(self):
         """Shows some basic info."""
-        sys.stderr.write("%s\n" % title) # TODO: GUI window
+        sys.stderr.write("%s\n" % title) # TODO: GUI window?
 
 
     def quit(self):
@@ -182,26 +205,28 @@ class MainWindow:
     def randomize(self, N=10, sigma=1.0):
         """Takes the best design and produces a swarm of N
         perturbed versions of it."""
-        if self.currentBest is None:
+        if self.swarm is None:
             self.load()
-        vector = self.currentBest.toVector()
+        vector = self.swarm[self.currentBest].toVector()
         M = vector.shape[0]
-        self.swarm  = swarm = [self.currentBest]
         self.swarmX = X = numpy.zeros((N, M), numpy.float)
+        self.swarmP = P = numpy.zeros((N, M), numpy.float)
         self.swarmV = V = numpy.zeros((N, M), numpy.float)
         self.data = data = numpy.zeros((N, 1), numpy.float)
         X[0,:] = vector
+        P[0,:] = vector
         V[0,:] = numpy.zeros_like(vector)
-        data[0,0] = self.currentBest.evaluate() # FIXME
+        data[0,0] = self.swarm[self.currentBest].evaluate() # FIXME
         for n in range(1,N):
             anotherX = numpy.zeros_like(vector)
             anotherV = numpy.zeros_like(vector)
             for m in range (0,M):
-                anotherX[m] = 1.0 * sigma * numpy.random.randn() * vector[m]
-                anotherV[m] = 0.1 * sigma * numpy.random.randn() * vector[m]
-            another = self.currentBest.fromVector(anotherX)
+                anotherX[m] = 1.0 * sigma * numpy.random.rand() * vector[m]
+                anotherV[m] = 0.1 * sigma * numpy.random.rand() * vector[m]
+            another = self.swarm[self.currentBest].fromVector(anotherX)
             swarm.append(another)
             X[n,:] = anotherX
+            P[n,:] = anotherX
             V[n,:] = anotherV
             data[n,0] = another.evaluate() # FIXME
 

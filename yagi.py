@@ -66,6 +66,8 @@ class Yagi:
         self.directions = None  # TODO
         self.frequencies = None # TODO
 
+    # TODO: __init__(filename) for loading from file..?
+        
 
     def copy(self):
         """Creates a full copy of this object."""
