@@ -13,7 +13,8 @@ import Tkinter
 import tkFileDialog
 import tkSimpleDialog
 import pylab
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2TkAgg
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.backends.backend_tkagg import NavigationToolbar2TkAgg
 
 # Yagi-specific stuff
 from yagi import *
@@ -21,6 +22,7 @@ from yagi import *
 title = 'PyPSO 0.1'
 
 
+# NOTE: class, named tuple, or dictionary?
 class PSOsettings:
     """Parameters related to running Particle Swarm Optimization."""
     def __init__(self, particles=10, width=1.0, greed=0.5, trust=0.5):
@@ -29,18 +31,65 @@ class PSOsettings:
         self.G = greed     # factor for (1 - inertia)
         self.T = trust     # update factor between personal and global best
         self.criterion = 'weight' # Python expression evaluated by particles
+        # TODO: validation of parameter values!
 
-    def setCriterion( expression ):
-        self.criterion = expression
+            
+class PSOdialog(tkSimpleDialog.Dialog):
+    """Simple dialog window for editing PSO parameter values"""
 
-                
+    def __init__(self, parent, settings, title=None):
+        self.result = settings # NOTE: has to happen before self.body()
+        tkSimpleDialog.Dialog.__init__(self, parent, title)
+        
+    def body(self, master):
+        Tkinter.Label(master, text="Number of particles:").grid(row=0)
+        Tkinter.Label(master, text="Initial swarm width:").grid(row=1)
+        Tkinter.Label(master, text="Particle inertia:").grid(row=2)
+        Tkinter.Label(master, text="Personal vs. Global best:").grid(row=3)
+        Tkinter.Label(master, text="Optimization criterion:").grid(row=4)
+
+        self.e1 = e = Tkinter.Entry(master)
+        e.delete(0, Tkinter.END)
+        e.insert(0, "%d" % self.result.N)
+        self.e2 = e = Tkinter.Entry(master)
+        e.delete(0, Tkinter.END)
+        e.insert(0, "%d" % self.result.W)
+        self.e3 = e = Tkinter.Entry(master)
+        e.delete(0, Tkinter.END)
+        e.insert(0, "%d" % self.result.G)
+        self.e4 = e = Tkinter.Entry(master)
+        e.delete(0, Tkinter.END)
+        e.insert(0, "%d" % self.result.T)
+        self.e5 = e = Tkinter.Entry(master)
+        e.delete(0, Tkinter.END)
+        e.insert(0, self.result.getCriterion())
+        # TODO: initial content of text fields from self.result?
+
+        self.e1.grid(row=0, column=1)
+        self.e2.grid(row=1, column=1)
+        self.e3.grid(row=2, column=1)
+        self.e4.grid(row=3, column=1)
+        self.e5.grid(row=4, column=1)
+        return self.e1 # initial focus
+        
+    def apply(self):
+        N = int(self.e1.get())
+        W = float(self.e2.get())
+        G = float(self.e3.get())
+        T = float(self.e4.get())
+        f = self.e5.get()
+        pso = PSOsettings(N,W,G,T)
+        pso.criterion = f # NOTE: no way of validating at this point?
+        self.result = pso
+    
+
 class MainWindow:
     """The main window."""
 
     def __init__(self, master):
         # current state
         self.__reset()
-        self.pso = PSOsettings() # TODO: GUI window for setting these
+        self.pso = PSOsettings() # starts with the same default values
 
         # GUI stuff
         self.root = master
@@ -55,7 +104,8 @@ class MainWindow:
         self.swarmP = None   # personal best state of each particle
         self.swarmV = None   # current velocity of each particle
         self.data   = None   # evaluations of the particles for each iteration
-
+        #self.pso settings stay the same
+        
         
     def __setMenus(self, master):
         # menu bar
@@ -97,6 +147,8 @@ class MainWindow:
         # Settings submenu
         self.setMenu = Tkinter.Menu(self.menu)
         self.menu.add_cascade(label="Settings", menu=self.setMenu)
+        self.setMenu.add_command(label="PSO parameters...", 
+                                 command=self.updateSettings)
         self.setMenu.add_command(label="About", 
                                  command=self.about)
         # TODO: configuration window for PSOsettings
@@ -106,7 +158,6 @@ class MainWindow:
         # a frame for all the stuff
         self.frame = frame = Tkinter.Frame(master)
         frame.bind("<Return>", self.next) # Press enter to progress
-        frame.pack()
 
         # a canvas for plotting evaluation history
         self.figure = fig = pylab.figure(1)
@@ -117,14 +168,21 @@ class MainWindow:
         ax.set_ylabel("Evaluation")
         ax.axis([0,10,0,10]) # TODO: better ideas?
         self.lines = None # ax.plot(self.data, '-')
+        
         self.canvas = canvas = FigureCanvasTkAgg(fig, frame)
         canvas.show()
-        canvas.get_tk_widget().pack(side=Tkinter.TOP, fill=Tkinter.BOTH, 
+        canvas.get_tk_widget().pack(side=Tkinter.TOP,
+                                    fill=Tkinter.BOTH, 
                                     expand=1)
+        #canvas.get_tk_widget().grid(row=1, column=0)
+        
         self.toolbar = NavigationToolbar2TkAgg(canvas, frame)
         self.toolbar.update()
         canvas._tkcanvas.pack(side=Tkinter.TOP, fill=Tkinter.BOTH, expand=1)
+        #canvas._tkcanvas.grid(row=0, column=0)
 
+        frame.pack()
+        
         # a button for randomizing the current guess
         self.rButton = Tkinter.Button(self.frame,\
                                       name='rbutton',\
@@ -132,7 +190,7 @@ class MainWindow:
                                       command=self.randomize,
                                       state=Tkinter.DISABLED)
         self.rButton.pack(side=Tkinter.LEFT)
-        # TODO: enabled at first, disabled then
+        #self.rButton.grid(row=2, column=0)
 
         # a button for advancing the optimization for one interation
         self.nButton = Tkinter.Button(self.frame,\
@@ -141,13 +199,16 @@ class MainWindow:
                                       command=self.next,
                                       state=Tkinter.DISABLED)
         self.nButton.pack(side=Tkinter.RIGHT)
-        # TODO: disabled at first, enabled after randomize
+        #self.nButton.grid(row=2, column=1)
 
         # status bar
         self.statusBar = Tkinter.Label(master, text="", bd=1, 
                                        relief=Tkinter.SUNKEN, 
                                        anchor=Tkinter.W)
         self.statusBar.pack(side=Tkinter.BOTTOM, fill=Tkinter.X)
+        #self.statusBar.grid(row=3, column=0)
+
+        frame.pack()
 
 
 
@@ -192,6 +253,11 @@ class MainWindow:
         sys.stderr.write("%s\n" % title) # TODO: GUI window?
 
 
+    def updateSettings(self):
+        dialog = PSOdialog(self.root, self.pso, "PSO parameters")
+        self.pso = dialog.result
+        
+
     def quit(self):
         """Does some clean-up and quits the program."""
         # TODO: save something to a file?
@@ -223,11 +289,11 @@ class MainWindow:
         self.report("Evaluating initial guess...")
         data[0,0] = self.swarm[self.currentBest].evaluate(self.pso.criterion)
         for n in range(1,N):
-            anotherX = numpy.zeros_like(vector)
-            anotherV = numpy.zeros_like(vector)
+            anotherX = numpy.ones_like(vector)
+            anotherV = numpy.ones_like(vector)
             for m in range (0,M):
-                anotherX[m] = 1.0 * sigma * numpy.random.rand() * vector[m]
-                anotherV[m] = 0.1 * sigma * numpy.random.rand() * vector[m]
+                anotherX[m] = (0.5 + sigma*numpy.random.rand()) * vector[m]
+                anotherV[m] = 0.1 * (sigma*numpy.random.rand()-0.5) * vector[m]
             another = self.swarm[self.currentBest].fromVector(anotherX)
             self.swarm.append(another)
             X[n,:] = anotherX
@@ -237,8 +303,8 @@ class MainWindow:
             data[n,0] = another.evaluate(self.pso.criterion)
         self.report("Random swarm of particles ready.")
         self.nButton.config(state=Tkinter.NORMAL)
-        self.lines = self.ax.plot(numpy.ones((N,1)), self.data[:,0], 'o')
-        #self.ax.axis()
+        self.lines = self.ax.plot(numpy.zeros((N,1)), self.data[:,0], 'o')
+        self.ax.autoscale()
 
 
     def next(self):
@@ -250,10 +316,10 @@ class MainWindow:
             return
         N = self.swarmX.shape[0]
 
-        # Phase 0: check which one is the current best
+        # check which particle is the current best
         bestValue = numpy.min(self.data[self.currentBest,:]) # TODO: store?
         for n in range(0,N):
-            personalBest = numpy.min(self.data[n,:]) # FIXME: check only news?
+            personalBest = numpy.min(self.data[n,:]) # FIXME: check only latest?
             if personalBest < bestValue:
                 bestValue = personalBest
                 self.currentBest = n
@@ -263,7 +329,8 @@ class MainWindow:
         # TODO: update swarmX by swarmV
         # TODO: update swarm from swarmX
         # TODO: evaluate each new particle and append to self.data
-
+        # TODO: update the plot
+        
 
 if __name__ == '__main__':
     # Command line arguments
