@@ -1,7 +1,10 @@
 #!/usr/bin/python
-# Filename : pypso
-# Author : Janne Toivola, OH2GXN
-# $Id$
+# -*- coding: utf-8 -*-
+##
+# @file
+# @brief GUI for running Particle Swarm Optimization over Yagi antenna design
+# @author Janne Toivola, OH2GXN, 2016
+
 
 # nuts and bolts
 import sys
@@ -25,20 +28,38 @@ title = 'PyPSO 0.1'
 # NOTE: class, named tuple, or dictionary?
 class PSOsettings:
     """Parameters related to running Particle Swarm Optimization."""
-    def __init__(self, particles=10, width=1.0, greed=0.5, trust=0.5):
-        self.N = particles # number of particles
-        self.W = width     # relative width of initial cloud of particles
-        self.G = greed     # factor for (1 - inertia)
-        self.T = trust     # update factor between personal and global best
-        self.criterion = 'weight' # Python expression evaluated by particles
-        # TODO: validation of parameter values!
+
+    def __init__(self, particles=10, width=0.5, inertia=0.5, confidence=0.5):
+        
+        self.N = particles        
+        self.W = width
+        self.I = inertia
+        self.C = confidence # update factor between personal and global best
+        # NOTE: validating the criterion depends on the context
+        self.criterion = '1.0' # Python expression evaluated by the particles
+        #self.criterion = 'weight' # a less trivial example
+
+    def valid(self):
+        if (self.N < 2):
+            #raise ValueError("At least 2 particles are required.")
+            return False
+        if (self.W <= 0.0 or 1.0 < self.W):
+            #raise ValueError("Width of the initial swarm has to be in [0,1].")
+            return False
+        if (self.I < 0.0 or 1.0 < self.I):
+            #raise ValueError("Inertial factor has to be in [0,1].")
+            return False
+        if (self.C < 0.0 or 1.0 < self.C):
+            #raise ValueError("Personal vs. Global weight has to be in [0,1].")
+            return False
+        return True
 
             
 class PSOdialog(tkSimpleDialog.Dialog):
     """Simple dialog window for editing PSO parameter values"""
 
     def __init__(self, parent, settings, title=None):
-        self.result = settings # NOTE: has to happen before self.body()
+        self.values = settings
         tkSimpleDialog.Dialog.__init__(self, parent, title)
         
     def body(self, master):
@@ -50,20 +71,20 @@ class PSOdialog(tkSimpleDialog.Dialog):
 
         self.e1 = e = Tkinter.Entry(master)
         e.delete(0, Tkinter.END)
-        e.insert(0, "%d" % self.result.N)
+        e.insert(0, "%d" % self.values.N)
         self.e2 = e = Tkinter.Entry(master)
         e.delete(0, Tkinter.END)
-        e.insert(0, "%d" % self.result.W)
+        e.insert(0, "%g" % self.values.W)
         self.e3 = e = Tkinter.Entry(master)
         e.delete(0, Tkinter.END)
-        e.insert(0, "%d" % self.result.G)
+        e.insert(0, "%g" % self.values.I)
         self.e4 = e = Tkinter.Entry(master)
         e.delete(0, Tkinter.END)
-        e.insert(0, "%d" % self.result.T)
+        e.insert(0, "%g" % self.values.C)
         self.e5 = e = Tkinter.Entry(master)
         e.delete(0, Tkinter.END)
-        e.insert(0, self.result.getCriterion())
-        # TODO: initial content of text fields from self.result?
+        e.insert(0, self.values.criterion)
+        # TODO: initial content of text fields from self.values?
 
         self.e1.grid(row=0, column=1)
         self.e2.grid(row=1, column=1)
@@ -71,25 +92,39 @@ class PSOdialog(tkSimpleDialog.Dialog):
         self.e4.grid(row=3, column=1)
         self.e5.grid(row=4, column=1)
         return self.e1 # initial focus
+
+    def buttonbox(self):
+        """Add standard button box, with sane order of Cancel & OK buttons."""
+        box = Tkinter.Frame(self)
+        w = Tkinter.Button(box, text="Cancel", width=10, command=self.cancel)
+        w.pack(side=Tkinter.LEFT, padx=5, pady=5)
+        w = Tkinter.Button(box, text="OK", width=10, command=self.ok,
+                           default=Tkinter.ACTIVE)
+        w.pack(side=Tkinter.LEFT, padx=5, pady=5)
+        self.bind("<Return>", self.ok)
+        self.bind("<Escape>", self.cancel)
+        box.pack()
         
     def apply(self):
-        N = int(self.e1.get())
-        W = float(self.e2.get())
-        G = float(self.e3.get())
-        T = float(self.e4.get())
-        f = self.e5.get()
-        pso = PSOsettings(N,W,G,T)
-        pso.criterion = f # NOTE: no way of validating at this point?
-        self.result = pso
-    
+        self.values.N = int(self.e1.get())
+        self.values.W = float(self.e2.get())
+        self.values.I = float(self.e3.get())
+        self.values.C = float(self.e4.get())
+        self.values.criterion = self.e5.get()
+
+    def validate(self):
+        if self.values.valid():
+            return 1
+        return 0
+                
 
 class MainWindow:
     """The main window."""
 
     def __init__(self, master):
         # current state
+        self.pso = PSOsettings() # starts with some constant default values
         self.__reset()
-        self.pso = PSOsettings() # starts with the same default values
 
         # GUI stuff
         self.root = master
@@ -255,7 +290,7 @@ class MainWindow:
 
     def updateSettings(self):
         dialog = PSOdialog(self.root, self.pso, "PSO parameters")
-        self.pso = dialog.result
+        #self.pso = dialog.result
         
 
     def quit(self):
@@ -264,6 +299,7 @@ class MainWindow:
         sys.stderr.write('Bye.\n')
         self.root.quit()
         self.root.destroy()
+        #exit() only for the main thread in a script
 
 
     def report(self, message):
@@ -353,6 +389,7 @@ if __name__ == '__main__':
     if args.file is not None:
         win.load(filename=args.file)
     # FIXME: so how to set boom & pole etc.?
+    root.protocol("WM_DELETE_WINDOW", win.quit) # quit when window closed
     
     # start the Tkinter event loop
     root.mainloop()
