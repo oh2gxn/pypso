@@ -322,8 +322,11 @@ class MainWindow:
         X[0,:] = vector
         P[0,:] = vector
         V[0,:] = numpy.zeros_like(vector)
+
         self.report("Evaluating initial guess...")
-        data[0,0] = self.swarm[self.currentBest].evaluate(self.pso.criterion)
+        data[0,0] = bestValue = self.swarm[self.currentBest].evaluate(self.pso.criterion)
+        self.lines = self.ax.plot(numpy.zeros((1,1)), self.data[0,0], 
+                                  color='red', linestyle='solid', marker='o')
         for n in range(1,N):
             anotherX = numpy.ones_like(vector)
             anotherV = numpy.ones_like(vector)
@@ -336,11 +339,26 @@ class MainWindow:
             P[n,:] = anotherX
             V[n,:] = anotherV
             self.report("Evaluating particle %d / %d..." % (n+1,N))
-            data[n,0] = another.evaluate(self.pso.criterion)
+            data[n,0] = personalBest = another.evaluate(self.pso.criterion)
+            self.lines.extend(self.ax.plot(numpy.zeros((1,1)), 
+                                           self.data[n,0], 
+                                           color='blue', 
+                                           linestyle='solid', 
+                                           marker='o'))
+            if personalBest < bestValue:
+                bestValue = personalBest
+                self.currentBest = n
+        #self.report("Particle %d seems best so far: %g" % 
+        #            (self.currentBest, bestValue))
+        self.lines.extend(self.ax.plot(0, 
+                                       self.data[self.currentBest,0], 
+                                       color='green', 
+                                       linestyle='dashed', 
+                                       marker='v'))
         self.report("Random swarm of particles ready.")
         self.nButton.config(state=Tkinter.NORMAL)
-        self.lines = self.ax.plot(numpy.zeros((N,1)), self.data[:,0], 'o')
-        self.ax.autoscale()
+        self.ax.autoscale(enable=True, axis='both', tight=True)
+        self.canvas.draw()
 
 
     def next(self):
@@ -351,21 +369,41 @@ class MainWindow:
             sys.stderr.write("You must load and randomize first.\n")
             return
         N = self.swarmX.shape[0]
-
-        # check which particle is the current best
-        bestValue = numpy.min(self.data[self.currentBest,:]) # TODO: store?
+        D = self.swarmX.shape[1]
+        T = self.data.shape[1]
+        
+        newdata = numpy.zeros((N,1))
         for n in range(0,N):
-            personalBest = numpy.min(self.data[n,:]) # FIXME: check only latest?
-            if personalBest < bestValue:
-                bestValue = personalBest
-                self.currentBest = n
-        self.report("Particle %d seems best so far: %g" % 
-                    (self.currentBest, bestValue))
-        # TODO: accelerate swarmV towards currentBest (gravitation)
-        # TODO: update swarmX by swarmV
-        # TODO: update swarm from swarmX
-        # TODO: evaluate each new particle and append to self.data
-        # TODO: update the plot
+            # accelerate velocity towards currentBest (gravitation)
+            rp = self.pso.C * (1.0 - self.pso.I) * numpy.random.rand(D)
+            rg = (1.0 - self.pso.C) * (1.0 - self.pso.I) * numpy.random.rand(D)
+            self.swarmV[n,:] = (self.pso.I * self.swarmV[n,:] +
+                                rp * (self.swarmP[n,:] - self.swarmX[n,:]) +
+                                rg * (self.swarmX[self.currentBest,:] - 
+                                      self.swarmX[n,:]))
+            # update position by velocity
+            self.swarmX[n,:] = self.swarmX[n,:] + self.swarmV[n,:]
+            # update swarm object from the updated position vector
+            self.swarm[n].updateFromVector(self.swarmX[n,:])
+            # evaluate the new particle and append to self.data
+            self.report("Evaluating particle %d / %d..." % (n+1,N))
+            newdata[n,0] = self.swarm[n].evaluate(self.pso.criterion)
+            if (newdata[n,0] < numpy.min(self.data[n,:])):
+                self.swarmP[n,:] = self.swarmX[n,:] # personal best
+
+        for n in range(0,N):
+            if (newdata[n,0] < numpy.min(self.data[self.currentBest,:])):
+                self.currentBest = n # globally best
+
+        # update the plot
+        self.data = numpy.concatenate((self.data, newdata), axis=1)
+        for n in range(0,N):
+            self.lines[n].set_data(numpy.arange(T+1), self.data[n,:])
+        self.lines[N].set_data(numpy.arange(T+1), 
+                               numpy.amin(self.data, axis=0))
+        self.ax.axis([0, T, numpy.min(self.data), numpy.max(self.data)])
+        #self.ax.autoscale(enable=True, axis='both', tight=True)
+        self.canvas.draw()
         
 
 if __name__ == '__main__':
