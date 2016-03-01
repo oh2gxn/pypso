@@ -139,6 +139,7 @@ class MainWindow:
         self.swarmP = None   # personal best state of each particle
         self.swarmV = None   # current velocity of each particle
         self.data   = None   # evaluations of the particles for each iteration
+        self.lines  = None
         #self.pso settings stay the same
         
         
@@ -201,7 +202,7 @@ class MainWindow:
         ax.set_title("Progress of the optimization")
         ax.set_xlabel("Iteration")
         ax.set_ylabel("Evaluation")
-        ax.axis([0,10,0,10]) # TODO: better ideas?
+        ax.axis([-1.0,1.0, 0,10]) # TODO: better ideas?
         self.lines = None # ax.plot(self.data, '-')
         
         self.canvas = canvas = FigureCanvasTkAgg(fig, frame)
@@ -249,11 +250,11 @@ class MainWindow:
 
     def new(self):
         """TODO: a dialog for a starting with a new guess..?"""
-        sys.stderr.write("Error: fancy GUI not implemented yet. Use load.\n")
         self.rButton.config(state=Tkinter.DISABLED)
         self.nButton.config(state=Tkinter.DISABLED)
         self.__reset()
-        # TODO: clear the plot too!
+        self.ax.cla() # clears the plot
+        sys.stderr.write("Error: fancy GUI not implemented yet. Use load.\n")
         # TODO: ask for number of elements and frequency band?
 
 
@@ -261,6 +262,8 @@ class MainWindow:
         """Dialog for loading the initial guess from a file."""
         if filename is None:
             filename = tkFileDialog.askopenfilename(**self.loadOptions)
+        if not filename:
+            return # user clicked Cancel
         guess = Yagi.loadCSV( filename )
         self.swarm = [guess]
         self.currentBest = 0
@@ -271,6 +274,8 @@ class MainWindow:
     def save(self):
         """Dialog for saving the current best dimension vector to a CSV file."""
         filename = tkFileDialog.asksaveasfilename(**self.saveOptions)
+        if not filename:
+            return # user clicked Cancel
         self.swarm[self.currentBest].saveCSV( filename )
         self.report("Current best saved to %s." % filename)
 
@@ -296,7 +301,7 @@ class MainWindow:
     def quit(self):
         """Does some clean-up and quits the program."""
         # TODO: save something to a file?
-        sys.stderr.write('Bye.\n')
+        sys.stderr.write('CU agn, 73 de OH2GXN.\n')
         self.root.quit()
         self.root.destroy()
         #exit() only for the main thread in a script
@@ -404,6 +409,7 @@ class MainWindow:
         self.ax.axis([0, T, numpy.min(self.data), numpy.max(self.data)])
         #self.ax.autoscale(enable=True, axis='both', tight=True)
         self.canvas.draw()
+        self.report("Iteration %d ready." % T)
         
 
 if __name__ == '__main__':
