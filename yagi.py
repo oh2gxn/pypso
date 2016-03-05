@@ -243,6 +243,7 @@ class Yagi:
                      (gntype, dielectric, conductivity))
 
         # Excitation with voltage source (driven element = tag 2)
+        # FIXME: YU7EF 7L6+8L4 dual band yagi is driven by the 4th element!
         V = (10.0, 0.0) # Volts, no phase considerations, TODO: free parameter
         stream.write("EX 0 %d %d 0 %g %g\n" % (2, (S//2)+1, V[0], V[1]))
 
