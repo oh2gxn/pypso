@@ -133,17 +133,30 @@ class MainWindow:
 
         
     def __reset(self):
+        """Initialization of PSO state."""
         self.currentBest = 0 # index of the particle with global best
         self.swarm  = None   # list of all particles, or None
         self.swarmX = None   # current state of each particle
         self.swarmP = None   # personal best state of each particle
         self.swarmV = None   # current velocity of each particle
         self.data   = None   # evaluations of the particles for each iteration
-        self.lines  = None
         #self.pso settings stay the same
-        
+
+    def __clear(self):
+        """Init and clean-up for the plot."""
+        if self.ax is None:
+            return
+        ax = self.ax
+        ax.cla()
+        ax.grid(True)
+        ax.set_title("Progress of the optimization")
+        ax.set_xlabel("Iteration")
+        ax.set_ylabel("Evaluation")
+        ax.axis([-1.0,1.0, 0,10]) # TODO: better ideas?
+        self.lines = None # ax.plot(self.data, '-')
         
     def __setMenus(self, master):
+        """Creates the toolbar at init."""
         # menu bar
         self.menu = Tkinter.Menu(master)
         master.config(menu=self.menu)
@@ -191,6 +204,7 @@ class MainWindow:
 
 
     def __setWindow(self, master):
+        """Creates the main GUI window at init."""
         # a frame for all the stuff
         self.frame = frame = Tkinter.Frame(master)
         frame.bind("<Return>", self.next) # Press enter to progress
@@ -198,12 +212,7 @@ class MainWindow:
         # a canvas for plotting evaluation history
         self.figure = fig = pylab.figure(1)
         self.ax = ax = fig.add_subplot(111)
-        ax.grid(True)
-        ax.set_title("Progress of the optimization")
-        ax.set_xlabel("Iteration")
-        ax.set_ylabel("Evaluation")
-        ax.axis([-1.0,1.0, 0,10]) # TODO: better ideas?
-        self.lines = None # ax.plot(self.data, '-')
+        self.__clear()
         
         self.canvas = canvas = FigureCanvasTkAgg(fig, frame)
         canvas.show()
@@ -253,7 +262,9 @@ class MainWindow:
         self.rButton.config(state=Tkinter.DISABLED)
         self.nButton.config(state=Tkinter.DISABLED)
         self.__reset()
-        self.ax.cla() # clears the plot
+        self.__clear()
+        self.canvas.draw()
+        
         sys.stderr.write("Error: fancy GUI not implemented yet. Use load.\n")
         # TODO: ask for number of elements and frequency band?
 
@@ -265,14 +276,13 @@ class MainWindow:
         if not filename:
             return # user clicked Cancel
         guess = Yagi.loadCSV( filename )
-        self.swarm = [guess]
-        self.currentBest = 0
+        self.firstplot(guess)
         self.report("Current guess loaded from %s." % filename)
         self.rButton.config(state=Tkinter.NORMAL)
         
 
     def save(self):
-        """Dialog for saving the current best dimension vector to a CSV file."""
+        """Dialog for saving the current best design to a CSV file."""
         filename = tkFileDialog.asksaveasfilename(**self.saveOptions)
         if not filename:
             return # user clicked Cancel
@@ -281,6 +291,7 @@ class MainWindow:
 
 
     def export(self):
+        """Dialog for saving the current best design to a NEC file."""
         filename = tkFileDialog.asksaveasfilename(**self.exportOptions)
         fid = open(filename, 'w')
         self.swarm[self.currentBest].fprintNEC(fid)
@@ -312,26 +323,45 @@ class MainWindow:
         self.statusBar.configure(text=message)
         self.statusBar.update_idletasks()
 
+        
+    def firstplot(self, guess):
+        self.__reset()
+        self.__clear()
+        self.swarm = [guess]
+        self.currentBest = 0
+        self.report("Evaluating initial guess...")
+        self.data = data = numpy.zeros((1,1))
+        data[0,0] = guess.evaluate(self.pso.criterion)
+        self.lines = self.ax.plot(numpy.zeros((1,1)), self.data[0,0], 
+                                  color='red', linestyle='solid', marker='o')
+        self.ax.autoscale(enable=True, axis='both', tight=True)
+        self.canvas.draw()
+
 
     def randomize(self, N=10, sigma=1.0):
         """Takes the best design and produces a swarm of N
         perturbed versions of it."""
         if self.swarm is None:
             self.load()
+        if len(self.swarm) > 1:
+            # restart from the best of an existing swarm
+            self.firstplot(self.swarm[self.currentBest])
+            bestValue = numpy.min(self.data[self.currentBest,:])
+        else:
+            # single initial particle just loaded
+            bestValue = self.data[0,0] # NOTE: computed during load!
+        self.data = data = numpy.zeros((N, 1), numpy.float)
+        data[0,0] = bestValue # avoids re-evaluating the initial guess
+            
         vector = self.swarm[self.currentBest].toVector()
         M = vector.shape[0]
         self.swarmX = X  = numpy.zeros((N, M), numpy.float)
         self.swarmP = P  = numpy.zeros((N, M), numpy.float)
         self.swarmV = V  = numpy.zeros((N, M), numpy.float)
-        self.data = data = numpy.zeros((N, 1), numpy.float)
         X[0,:] = vector
         P[0,:] = vector
         V[0,:] = numpy.zeros_like(vector)
 
-        self.report("Evaluating initial guess...")
-        data[0,0] = bestValue = self.swarm[self.currentBest].evaluate(self.pso.criterion)
-        self.lines = self.ax.plot(numpy.zeros((1,1)), self.data[0,0], 
-                                  color='red', linestyle='solid', marker='o')
         for n in range(1,N):
             anotherX = numpy.ones_like(vector)
             anotherV = numpy.ones_like(vector)
@@ -417,11 +447,7 @@ if __name__ == '__main__':
     note = 'A program for running Particle Swarm Optimization for yagis'
     parser = argparse.ArgumentParser(description=note)
     parser.add_argument('file', nargs='?', metavar='elements.csv',
-        help='file with element length,position,[diameter,[conductivity]]')
-    parser.add_argument('-b', '--boom', metavar='length,diameter',
-        help='optional boom length and diameter')
-    parser.add_argument('-p', '--pole', metavar='height,diameter',
-        help='optional antenna mast height and diameter')
+        help='file with element positions and dimensions')
     args = parser.parse_args()
         
     # the root widget

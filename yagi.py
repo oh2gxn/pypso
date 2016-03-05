@@ -11,15 +11,21 @@ import argparse
 
 
 class Yagi:
-    """Represents a Yagi-Uda antenna and interfaces the NEC2 simulator."""
+    """Represents a Yagi-Uda antenna and interfaces the NEC2 simulator.
+    NOTE: There are three different representations involved:
+    - CSV file:   absolute, non-negative element positions and lengths
+    - PSO vector: incremental element positions, and absolute lengths
+    - NEC file:   absolute real coordinates of element ends (and much more)
+    """
 
     def __init__(self, dimensions, diam=0.01, cond=2.4938e7):
         """Constructs a Yagi antenna based on the given dimensions.
+        Typically, these are directly from build instructions.
 
         Arguments:
         dimensions -- a numpy matrix with a row for each element,
         and 2 to 4 columns:
-	- element position (in meters) on the boom,
+	- element position on the boom (in meters),
         - element length (in m, centered / symmetric),
 	- optional element diameter (in m, default 10mm), and
         - optional element conductivity (in S, default Al).
@@ -149,9 +155,14 @@ class Yagi:
     def toVector(self):
         """Represents the length & position of each element as a vector.
         Used for PSO or other algorithms updating the free parameters.
+        Positions are incremental, so any unsorted vector of non-negative
+        floats is valid.
         """
+        E = self.dimensions.shape[0]
+        matrix = numpy.copy(self.dimensions[:,0:2])
+        matrix[1:E,0] = numpy.diff(matrix[:,0]) # increments, not absolute
         # TODO: maybe (len0, pos0, len1, pos1,...) is not good?
-        return self.dimensions[:,0:2].flatten()
+        return matrix.flatten()
 
     def fromVector(self, dimensions):
         """Creates a new yagi object according to a given vector.
@@ -166,7 +177,9 @@ class Yagi:
         NOTE: a setter method – does not create a new yagi object.
         """
         E = self.dimensions.shape[0]
-        self.dimensions[:,0:2] = newDimensions.reshape((E,2))
+        matrix = newDimensions.reshape((E,2))
+        self.dimensions[:,0] = numpy.cumsum(matrix[:,0]) # absolute, not incr.
+        self.dimensions[:,1] = matrix[:,1]
         self.updateBoom()
         
 
@@ -302,6 +315,8 @@ if __name__ == '__main__':
         help='file with element length,position,[diameter,[conductivity]]')
     parser.add_argument('-b', '--boom', metavar='length,diameter',
         help='optional boom length and diameter')
+    parser.add_argument('-g', '--gap', metavar='distance',
+        help='optional insulating gap between element center and boom center')
     parser.add_argument('-p', '--pole', metavar='height,diameter',
         help='optional antenna mast height and diameter')
     parser.add_argument('-o', '--output', metavar='yagi.nec',
@@ -311,13 +326,16 @@ if __name__ == '__main__':
 
     # Build the antenna
     antenna = Yagi.loadCSV( args.file )
+    gap = 0.0
+    if args.gap is not None:
+        gap = float(args.gap)
     if args.boom is not None:
         length,diameter = map(float, args.boom.split(','))
-        antenna.setBoom(length,diameter)
+        antenna.setBoom(length, diameter, gap)
         # TODO: optional length
     if args.pole is not None:
         length,diameter = map(float, args.pole.split(','))
-        antenna.setPole(length,diameter)    
+        antenna.setPole(length, diameter)
     # TODO: other parameters?
 
     # Print the NEC stuff
