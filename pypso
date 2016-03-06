@@ -15,6 +15,7 @@ import numpy
 import Tkinter
 import tkFileDialog
 import tkSimpleDialog
+import tkMessageBox
 import pylab
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.backends.backend_tkagg import NavigationToolbar2TkAgg
@@ -301,7 +302,7 @@ class MainWindow:
 
     def about(self):
         """Shows some basic info."""
-        sys.stderr.write("%s\n" % title) # TODO: GUI window?
+        tkMessageBox.showinfo("About", "%s\n" % title) # TODO: more...
 
 
     def updateSettings(self):
