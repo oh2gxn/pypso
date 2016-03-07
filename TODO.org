@@ -9,7 +9,7 @@ semi-automatic antenna design. The idea is following:
 - 1 :: take an initial guess for a yagi antenna, which has: 
   - a given number of elements, approximately good lengths and positions
   - long enough boom
-- 2 :: define which P parameters to optimize (elem. lengths and positions)
+- 2 :: define which D parameters to optimize (elem. lengths and positions)
 - 3 :: define a univariate evaluation criterion (say, an equation based on
        SWR & F/B ratio at given frequency band)
 - 4 :: generate a "cloud" of N proposed antenna designs by randomly varying
@@ -18,7 +18,7 @@ semi-automatic antenna design. The idea is following:
   - run NEC2
   - calculate the evaluation function (3)
 - 6 :: modify each of the designs in terms of PSO
-  - the parameter vector is a point in P-dimensional space
+  - the parameter vector is a point in D-dimensional space
   - each antenna design (particle) has inertia,
   - but also attracted towards the best of the current N designs 
     (or the best neighbor to give SOM-like behavior / locality?)
@@ -26,7 +26,8 @@ semi-automatic antenna design. The idea is following:
   - else, move to (5) for next iteration
 - 8 :: if the end result looks like crap, jump to (1)
 
-Author: Janne Toivola, OH2GXN
+Copyright: Janne Toivola, OH2GXN, 2015
+Licence: The GNU General Public Licence v3.0 (GPLv3)
 
 
 * Sources of information
@@ -70,12 +71,14 @@ can be easily and quickly made using antenna design software."
 - done in yagi.fprintNEC
 ** TODO NEC result parser
 - see what the output looks like
+- make some of the computed parameters local to Python?
 ** TODO Evaluation function editor
 - text box -> sanitized string
 - Python can "eval(string)"
-** TODO Evaluation result visualization
+** DONE Evaluation result visualization
 - plot goodness vs. iteration curves for each particle, live update
-- separate plots for individual terms (like F/B ratio)
-** TODO PSO update rule
+- separate plots for individual terms (like F/B ratio), probably too messy
+** DONE PSO initialization
+- initial random swarm and also initial momentum
+** DONE PSO update rule
 - inertia vs. attraction towards winner
-- initial position and also initial momentum?

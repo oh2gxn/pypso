@@ -7,6 +7,7 @@
 
 
 # nuts and bolts
+import os
 import sys
 import argparse
 import numpy
@@ -23,8 +24,8 @@ from matplotlib.backends.backend_tkagg import NavigationToolbar2TkAgg
 # Yagi-specific stuff
 from yagi import *
 
-title = 'PyPSO 0.1'
-
+progname = 'PyPSO'
+version  = '0.1'
 
 # NOTE: class, named tuple, or dictionary?
 class PSOsettings:
@@ -191,7 +192,7 @@ class MainWindow:
                                   command=self.save)
         self.fileMenu.add_command(label="Export NEC...",
                                   command=self.export)
-        self.fileMenu.add_command(label="Quit!", 
+        self.fileMenu.add_command(label="Quit", 
                                   command=self.quit)
 
         # Settings submenu
@@ -201,7 +202,6 @@ class MainWindow:
                                  command=self.updateSettings)
         self.setMenu.add_command(label="About", 
                                  command=self.about)
-        # TODO: configuration window for PSOsettings
 
 
     def __setWindow(self, master):
@@ -278,7 +278,7 @@ class MainWindow:
             return # user clicked Cancel
         guess = Yagi.loadCSV( filename )
         self.firstplot(guess)
-        self.report("Current guess loaded from %s." % filename)
+        self.report("Initial guess loaded from %s." % filename)
         self.rButton.config(state=Tkinter.NORMAL)
         
 
@@ -302,21 +302,21 @@ class MainWindow:
 
     def about(self):
         """Shows some basic info."""
-        tkMessageBox.showinfo("About", "%s\n" % title) # TODO: more...
+        tkMessageBox.showinfo("About", "%s version %s\n" % 
+                              (progname, version)) # TODO: more...
 
 
     def updateSettings(self):
         dialog = PSOdialog(self.root, self.pso, "PSO parameters")
-        #self.pso = dialog.result
         
 
     def quit(self):
         """Does some clean-up and quits the program."""
-        # TODO: save something to a file?
-        sys.stderr.write('CU agn, 73 de OH2GXN.\n')
-        self.root.quit()
-        self.root.destroy()
-        #exit() only for the main thread in a script
+        if tkMessageBox.askokcancel("Quit", "Remembered to save the result?"):
+            sys.stderr.write('CU agn, 73 de OH2GXN.\n')
+            self.root.quit()
+            self.root.destroy()
+            #exit() only for the main thread in a script
 
 
     def report(self, message):
@@ -326,6 +326,7 @@ class MainWindow:
 
         
     def firstplot(self, guess):
+        """Things to do when starting a new plot from the given design."""
         self.__reset()
         self.__clear()
         self.swarm = [guess]
@@ -339,36 +340,39 @@ class MainWindow:
         self.canvas.draw()
 
 
-    def randomize(self, N=10, sigma=1.0):
+    def randomize(self):
         """Takes the best design and produces a swarm of N
         perturbed versions of it."""
+
+        # Make sure we have one candidate
         if self.swarm is None:
             self.load()
         if len(self.swarm) > 1:
             # restart from the best of an existing swarm
             self.firstplot(self.swarm[self.currentBest])
-            bestValue = numpy.min(self.data[self.currentBest,:])
-        else:
-            # single initial particle just loaded
-            bestValue = self.data[0,0] # NOTE: computed during load!
+
+        # Make it the first particle of N
+        N = self.pso.N
+        bestValue = self.data[0,0] # NOTE: computed during firstplot()
         self.data = data = numpy.zeros((N, 1), numpy.float)
         data[0,0] = bestValue # avoids re-evaluating the initial guess
-            
+        
+        # Init PSO, the first one starts with zero velocity
         vector = self.swarm[self.currentBest].toVector()
         M = vector.shape[0]
+        W = self.pso.W
         self.swarmX = X  = numpy.zeros((N, M), numpy.float)
         self.swarmP = P  = numpy.zeros((N, M), numpy.float)
         self.swarmV = V  = numpy.zeros((N, M), numpy.float)
         X[0,:] = vector
         P[0,:] = vector
         V[0,:] = numpy.zeros_like(vector)
-
         for n in range(1,N):
             anotherX = numpy.ones_like(vector)
             anotherV = numpy.ones_like(vector)
             for m in range (0,M):
-                anotherX[m] = (0.5 + sigma*numpy.random.rand()) * vector[m]
-                anotherV[m] = 0.1 * (sigma*numpy.random.rand()-0.5) * vector[m]
+                anotherX[m] = (1.0 + W * (numpy.random.rand()-0.5)) * vector[m]
+                anotherV[m] = 0.1 * (W * (numpy.random.rand()-0.5)) * vector[m]
             another = self.swarm[self.currentBest].fromVector(anotherX)
             self.swarm.append(another)
             X[n,:] = anotherX
@@ -407,16 +411,18 @@ class MainWindow:
         N = self.swarmX.shape[0]
         D = self.swarmX.shape[1]
         T = self.data.shape[1]
+        C = self.pso.C
+        I = self.pso.I
         
         newdata = numpy.zeros((N,1))
         for n in range(0,N):
-            # accelerate velocity towards currentBest (gravitation)
-            rp = self.pso.C * (1.0 - self.pso.I) * numpy.random.rand(D)
-            rg = (1.0 - self.pso.C) * (1.0 - self.pso.I) * numpy.random.rand(D)
-            self.swarmV[n,:] = (self.pso.I * self.swarmV[n,:] +
-                                rp * (self.swarmP[n,:] - self.swarmX[n,:]) +
-                                rg * (self.swarmX[self.currentBest,:] - 
-                                      self.swarmX[n,:]))
+            # accelerate velocity towards personal & global optima
+            rp =        C  * numpy.random.rand(D)
+            rg = (1.0 - C) * numpy.random.rand(D)
+            self.swarmV[n,:] = (I * self.swarmV[n,:] + (1.0 - I) *
+                                (rp * (self.swarmP[n,:] - self.swarmX[n,:]) +
+                                 rg * (self.swarmX[self.currentBest,:] - 
+                                       self.swarmX[n,:])))
             # update position by velocity
             self.swarmX[n,:] = self.swarmX[n,:] + self.swarmV[n,:]
             # update swarm object from the updated position vector
@@ -429,7 +435,7 @@ class MainWindow:
 
         for n in range(0,N):
             if (newdata[n,0] < numpy.min(self.data[self.currentBest,:])):
-                self.currentBest = n # globally best
+                self.currentBest = n # new globally & historically best
 
         # update the plot
         self.data = numpy.concatenate((self.data, newdata), axis=1)
@@ -450,10 +456,20 @@ if __name__ == '__main__':
     parser.add_argument('file', nargs='?', metavar='elements.csv',
         help='file with element positions and dimensions')
     args = parser.parse_args()
-        
+    
     # the root widget
     root = Tkinter.Tk()
-    root.title(title)
+    root.title("%s" % (progname)) # progname - empty?
+    try:
+        # TODO: switch the default icon?
+        #root.iconbitmap(default='line-chart.xbm')
+        directory = sys.path[0]
+        iconfile = os.path.join(directory, "line-chart.gif")
+        icon = Tkinter.PhotoImage(file=iconfile)
+        root.iconbitmap(icon)
+        # Icon from http://www.flaticon.com/authors/situ-herrera  CC 3.0 BY
+    except Tkinter.TclError:
+        sys.stderr.write("Error: switching the icon failed.\n")
     
     # instance of our application
     win = MainWindow(root)
