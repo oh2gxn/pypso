@@ -8,6 +8,8 @@
 import sys
 import numpy
 import argparse
+import tempfile
+import subprocess
 
 
 class Yagi:
@@ -290,6 +292,15 @@ class Yagi:
         """Runs NEC2 and evaluates the given design criterion."""
         # TODO: criterion coupled with the NEC FR and RP cards?
 
+        # tmpfile = tempfile.NamedTemporaryFile()
+        # self.fprintNEC( tmpfile.file )
+        # try:
+        #     results = subprocess.check_output([ "nec2", tmpfile.name ])
+        # except subprocess.CalledProcessError:
+        #     sys.stderr.write("Error: Failed to run nec2.\n")
+        #     results = ""
+        # tmpfile.close()
+
         # Example output from NEC2C, for each FR:
         # ...
         # ---------- POWER BUDGET ---------
@@ -299,6 +310,9 @@ class Yagi:
         # NETWORK LOSS  =  0.0000E+00 Watts
         # EFFICIENCY    =   88.85 Percent
         # ...
+
+        # TODO: extract the relevant expressions into suitable arrays, like
+        #       efficiency[51410:20:51590] ???
 
         # just some test expression:
         weight = numpy.sum( numpy.multiply( self.dimensions[:,0], 
