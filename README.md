@@ -41,5 +41,5 @@ Note, that just clicking "Randomize" will effectively perform a random walk.
 See the file TODO.org for more details on what is still missing and why...
 
 Copyright: Janne Toivola, OH2GXN, 2015
-Licence: GNU General Public Licence v3.0 
+License: GNU General Public License v3.0 
 http://www.gnu.org/licenses/gpl-3.0.en.html
