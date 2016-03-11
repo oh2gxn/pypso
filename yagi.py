@@ -295,9 +295,9 @@ class Yagi:
         # tmpfile = tempfile.NamedTemporaryFile()
         # self.fprintNEC( tmpfile.file )
         # try:
-        #     results = subprocess.check_output([ "nec2", tmpfile.name ])
+        #     results = subprocess.check_output([ "nec2c", "-i", tmpfile.name ])
         # except subprocess.CalledProcessError:
-        #     sys.stderr.write("Error: Failed to run nec2.\n")
+        #     sys.stderr.write("Error: Failed to run nec2c.\n")
         #     results = ""
         # tmpfile.close()
 
