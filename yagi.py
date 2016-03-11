@@ -5,6 +5,7 @@
 # @brief Code for evaluating Yagi-Uda antennas with NEC2
 # @author Janne Toivola, OH2GXN, 2015
 
+import os
 import sys
 import numpy
 import argparse
@@ -292,15 +293,31 @@ class Yagi:
         """Runs NEC2 and evaluates the given design criterion."""
         # TODO: criterion coupled with the NEC FR and RP cards?
 
-        # tmpfile = tempfile.NamedTemporaryFile()
-        # self.fprintNEC( tmpfile.file )
-        # try:
-        #     results = subprocess.check_output([ "nec2c", "-i", tmpfile.name ])
-        # except subprocess.CalledProcessError:
-        #     sys.stderr.write("Error: Failed to run nec2c.\n")
-        #     results = ""
-        # tmpfile.close()
+        # Run nec2c, which is a translation of the original NEC2
+        # NOTE: it uses ordinary input & output files ALWAYS,
+        # unless hacked to use stdout for better composability?
+        tmpnec = tempfile.NamedTemporaryFile(suffix='.nec')
+        basename = os.path.splitext(tmpnec.name)[0]
+        if len(basename) < 2:
+            basename = tmpnec.name # splitext failed, just use X.nec.out
+        tmpout = '%s.out' % basename
+        self.fprintNEC( tmpnec.file ) # TODO: proper FR & RP ?
+        try:
+            stdout = subprocess.check_output([ 'nec2c', 
+                                               '-i', tmpnec.name,
+                                               '-o', tmpout ])
+        except subprocess.CalledProcessError as e:
+            sys.stderr.write("Error: Failed to run nec2c.\n") # print e too?
+            stdout = ""
+        except OSError as e:
+            sys.stderr.write("Error: Could not find nec2c.\n")
+            stdout = ""            
 
+        try:
+            with open(tmpout, 'r') as results:
+                for line in results:
+                    if line.contains('='):
+                        sys.stdout.write("%s\n" % line)
         # Example output from NEC2C, for each FR:
         # ...
         # ---------- POWER BUDGET ---------
@@ -313,6 +330,14 @@ class Yagi:
 
         # TODO: extract the relevant expressions into suitable arrays, like
         #       efficiency[51410:20:51590] ???
+        except IOError:
+            sys.stderr.write("Error: Could not read NEC results.\n")
+
+        tmpnec.close() # or .file.close() ?
+        try:
+            os.remove(tmpout)
+        except (OSError, IOError):
+            pass
 
         # just some test expression:
         weight = numpy.sum( numpy.multiply( self.dimensions[:,0], 
