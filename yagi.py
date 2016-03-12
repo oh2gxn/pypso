@@ -9,6 +9,7 @@ import os
 import sys
 import numpy
 import argparse
+import re
 import tempfile
 import subprocess
 
@@ -70,19 +71,23 @@ class Yagi:
         matrix[:,0] = dimensions[:,0] - Xmin
         
         self.dimensions = matrix
-        self.gap = 0.0
-        self.boom = numpy.zeros(3, numpy.float)
-        self.pole = numpy.zeros(3, numpy.float)
-        self.directions = None  # TODO
-        self.frequencies = None # TODO
 
-    # TODO: __init__(filename) for loading from file..?
+        # FIXME: None of the below can be loaded from a CSV file matrix?
+        # These are "additional details" that don't fit the neat PSO world.
+        # Have them packed on a single row at the beginning of CSV???
+        self.gap = 0.0 # meters between element center and boom center
+        self.boom = numpy.zeros(3, numpy.float) # len, diam, conductivity
+        self.pole = numpy.zeros(3, numpy.float) # len, diam, conductivity
+        self.radiator = 2 # driven by the second element (1st is reflector)
+        self.frequencies = numpy.array([51.510, 0.020, 51.510]) # 6m call freq.
+
+
     @staticmethod
     def loadCSV(filename):
         return Yagi( numpy.loadtxt( filename, delimiter=',' ))
         
     def saveCSV(self, filename):
-        numpy.savetxt( filename, delimiter=',' )
+        numpy.savetxt( filename, self.dimensions, delimiter=',' )
         
 
     def copy(self):
@@ -153,6 +158,35 @@ class Yagi:
         else:
             self.pole = numpy.zeros(3, numpy.float)
 
+    def setRadiator(self, index):
+        """Selects which one of E elements acts as the driven element.
+        Arguments:
+        index -- an integer in [1,E], typically 2 (since 1st is reflector)
+        """
+        if 0 < index and index <= self.dimensions.shape[0]:
+            self.radiator = index
+
+    def setFrequencies(self, frlist):
+        """Sets the frequency range used for NEC. It has to be uniform and
+        contiguous.
+
+        Arguments:
+        frlist -- list of 1 to 3 values: minimum, [[increment], maximum]
+        """
+        if frlist is None:
+            return
+        minimum = frlist[0]
+        if len(frlist) > 1:
+            if len(frlist) > 2:
+                increment = frlist[1]
+                maximum   = frlist[2]
+            else:
+                maximum   = frlist[1]
+                increment = maximum - minimum
+        else:
+            increment = 0.020
+            maximum   = minimum
+        self.frequencies = numpy.array([minimum, increment, maximum])
 
 
     def toVector(self):
@@ -187,7 +221,9 @@ class Yagi:
         
 
     def fprintNEC(self, stream):
-        """Prints a NEC2 compatible description of the antenna."""
+        """Prints a NEC2 compatible description of the antenna.
+        NOTE: The issue is that NEC2 considers also the input signal.
+        """
         
         # Comment lines and Comment End
         W = self.dimensions # shorter name for wires
@@ -248,7 +284,8 @@ class Yagi:
         # Excitation with voltage source (driven element = tag 2)
         # FIXME: YU7EF 7L6+8L4 dual band yagi is driven by the 4th element!
         V = (10.0, 0.0) # Volts, no phase considerations, TODO: free parameter
-        stream.write("EX 0 %d %d 0 %g %g\n" % (2, (S//2)+1, V[0], V[1]))
+        stream.write("EX 0 %d %d 0 %g %g\n" % (self.radiator, (S//2)+1, 
+                                               V[0], V[1]))
 
         # Wire losses
         for e in range(0,E):
@@ -268,11 +305,12 @@ class Yagi:
 
         # Frequencies
         # TODO: adjustable frequencies according to evaluation criteria
-        # IARU Region 1 Band Plan:
+        # IARU Region 1 Band Plan for 6 meters:
         # - SSB: 50.100 - 50.200 MHz
         # - FM simplex: 51.410 - 51.590 MHz, 51.510 MHz calling freq.
         #frange = numpy.array([51.410, 0.020, 51.590]) # [min, inc, max] MHz
-        frange = numpy.array([51.510, 0.020, 51.510]) # [min, inc, max] MHz
+        #frange = numpy.array([51.510, 0.020, 51.510]) # [min, inc, max] MHz
+        frange = self.frequencies
         F = int((frange[2] - frange[0])/frange[1] + 1) # increment > 0 !
         stream.write("FR 0 %d 0 0 %g %g\n" % (F, frange[0], frange[1]))
 
@@ -292,6 +330,10 @@ class Yagi:
     def evaluate(self, criterion):
         """Runs NEC2 and evaluates the given design criterion."""
         # TODO: criterion coupled with the NEC FR and RP cards?
+        # Possible hack:
+        # - collect all frequency range expressions of type "[a:i:b,c:j:d]"
+        # - for each in the union of all frequencies: run NEC, collect the stats
+        # - evaluate the criterion without further sanitization?
 
         # Run nec2c, which is a translation of the original NEC2
         # NOTE: it uses ordinary input & output files ALWAYS,
@@ -316,7 +358,7 @@ class Yagi:
         try:
             with open(tmpout, 'r') as results:
                 for line in results:
-                    if line.contains('='):
+                    if '=' in line:
                         sys.stdout.write("%s\n" % line)
         # Example output from NEC2C, for each FR:
         # ...
@@ -329,7 +371,7 @@ class Yagi:
         # ...
 
         # TODO: extract the relevant expressions into suitable arrays, like
-        #       efficiency[51410:20:51590] ???
+        #       efficiency[51410:20:51590], maybe sparse or lazy ???
         except IOError:
             sys.stderr.write("Error: Could not read NEC results.\n")
 
@@ -355,10 +397,14 @@ if __name__ == '__main__':
         help='file with element length,position,[diameter,[conductivity]]')
     parser.add_argument('-b', '--boom', metavar='length,diameter',
         help='optional boom length and diameter')
+    parser.add_argument('-f', '--frequency', metavar='min:inc:max',
+        help='optional operating frequency or frequency range in MHz')
     parser.add_argument('-g', '--gap', metavar='distance',
         help='optional insulating gap between element center and boom center')
     parser.add_argument('-p', '--pole', metavar='height,diameter',
         help='optional antenna mast height and diameter')
+    parser.add_argument('-r', '--radiator', metavar='index',
+        help='optional driven element index (1...E, default=2)')
     parser.add_argument('-o', '--output', metavar='yagi.nec',
         help='optional NEC output file')
     # TODO: others
@@ -373,9 +419,14 @@ if __name__ == '__main__':
         length,diameter = map(float, args.boom.split(','))
         antenna.setBoom(length, diameter, gap)
         # TODO: optional length
+    if args.frequency is not None:
+        frlist = map(float, args.frequency.split(':'))
+        antenna.setFrequencies(frlist)
     if args.pole is not None:
         length,diameter = map(float, args.pole.split(','))
         antenna.setPole(length, diameter)
+    if args.radiator is not None:
+        antenna.setRadiator(int(args.radiator))
     # TODO: other parameters?
 
     # Print the NEC stuff
