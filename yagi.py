@@ -343,11 +343,13 @@ class Yagi:
         if len(basename) < 2:
             basename = tmpnec.name # splitext failed, just use X.nec.out
         tmpout = '%s.out' % basename
-        self.fprintNEC( tmpnec.file ) # TODO: proper FR & RP ?
+        fid = open(tmpnec.name, 'w')
+        self.fprintNEC( fid ) # TODO: proper FR & RP ?
+        fid.close()  # FIXME: the file does not exist!
         try:
-            stdout = subprocess.check_output([ 'nec2c', 
-                                               '-i', tmpnec.name,
-                                               '-o', tmpout ])
+            stdout = subprocess.check_output([ "nec2c", 
+                                               "-i %s" % tmpnec.name,
+                                               "-o %s" % tmpout ])
         except subprocess.CalledProcessError as e:
             sys.stderr.write("Error: Failed to run nec2c.\n") # print e too?
             stdout = ""
