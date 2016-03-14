@@ -335,6 +335,8 @@ class Yagi:
         # - for each in the union of all frequencies: run NEC, collect the stats
         # - evaluate the criterion without further sanitization?
 
+        # TODO: proper FR card and other details!
+        
         # Run nec2c, which is a translation of the original NEC2
         # NOTE: it uses ordinary input & output files ALWAYS,
         # unless hacked to use stdout for better composability?
@@ -343,25 +345,30 @@ class Yagi:
         if len(basename) < 2:
             basename = tmpnec.name # splitext failed, just use X.nec.out
         tmpout = '%s.out' % basename
-        fid = open(tmpnec.name, 'w')
-        self.fprintNEC( fid ) # TODO: proper FR & RP ?
-        fid.close()  # FIXME: the file does not exist!
+        necfile = open(tmpnec.name, 'w')
+        self.fprintNEC( necfile )
+        #self.fprintNEC( tmpnec.file ) # NOTE: tmpnec.file does not exist
+        necfile.close()
         try:
+            sys.stderr.write("Running: nec2c -i %s -o %s\n" %
+                             (tmpnec.name,tmpout))
             stdout = subprocess.check_output([ "nec2c", 
-                                               "-i %s" % tmpnec.name,
-                                               "-o %s" % tmpout ])
+                                               "-i", tmpnec.name,
+                                               "-o", tmpout ])
         except subprocess.CalledProcessError as e:
             sys.stderr.write("Error: Failed to run nec2c.\n") # print e too?
             stdout = ""
         except OSError as e:
             sys.stderr.write("Error: Could not find nec2c.\n")
             stdout = ""            
-
+        #sys.stderr.write("Output: stdout='%s';\n" % stdout)
+            
         try:
             with open(tmpout, 'r') as results:
                 for line in results:
                     if '=' in line:
-                        sys.stdout.write("%s\n" % line)
+                        sys.stdout.write("NEC2: %s" % line) # DEBUG
+                        
         # Example output from NEC2C, for each FR:
         # ...
         # ---------- POWER BUDGET ---------
