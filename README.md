@@ -22,11 +22,15 @@ considering a dual band yagi for both 6m band and the new 4m band.
 
 `yagi.py`: isolates all aspects specific to the antenna designs. It can
 operate as a standalone CLI program for turning a simple construction plan
-(element dimensions and positions) into a NEC simulation.
+(element dimensions and positions) into a NEC simulation. Just write the 
+list of element lengths, positions, and diameters into a CSV text file and 
+convert into a NEC file with yagi.py.
 
 Example:
 ```
 $ yagi.py -o 6-el.nec 6-el.csv
+$ nec2c -i 6-el.nec -o 6-el.out
+$ xnecview 6-el.nec 6-el.out
 ```
 
 `pypso`: has a graphical user interface for
@@ -36,10 +40,11 @@ $ yagi.py -o 6-el.nec 6-el.csv
 - running a particle swarm optimization step, searching for better designs
 - plotting the evaluations for each of the particles in the process
 
-Note, that just clicking "Randomize" will effectively perform a random walk.
+Note, that just clicking "Randomize" over and over again will effectively
+perform a random walk. Clicking "Next" will perform a PSO iteration.
 
 See the file TODO.org for more details on what is still missing and why...
 
 Copyright: Janne Toivola, OH2GXN, 2015
-License: GNU General Public License v3.0 
-http://www.gnu.org/licenses/gpl-3.0.en.html
+
+License: [GNU General Public License v3.0](http://www.gnu.org/licenses/gpl-3.0.en.html)
