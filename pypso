@@ -461,15 +461,13 @@ if __name__ == '__main__':
     root = Tkinter.Tk()
     root.title("%s" % (progname)) # progname - empty?
     try:
-        # TODO: switch the default icon?
-        #root.iconbitmap(default='line-chart.xbm')
-        directory = sys.path[0]
-        iconfile = os.path.join(directory, "line-chart.gif")
-        icon = Tkinter.PhotoImage(file=iconfile)
-        root.iconbitmap(icon)
-        # Icon from http://www.flaticon.com/authors/situ-herrera  CC 3.0 BY
-    except Tkinter.TclError:
-        sys.stderr.write("Error: switching the icon failed.\n")
+        ## Icon from http://www.flaticon.com/authors/situ-herrera  CC 3.0 BY
+        # Switch the default icon on Linux. Should be a gif on OS X?
+        icon = Tkinter.PhotoImage(file='line-chart.png')
+        root.tk.call('wm', 'iconphoto', root._w, icon)
+        #root.iconbitmap(default='line-chart.png') # no f.cking docs on this!
+    except Tkinter.TclError as e:
+        sys.stderr.write("Error: switching the icon failed: %s\n" % e)
     
     # instance of our application
     win = MainWindow(root)
